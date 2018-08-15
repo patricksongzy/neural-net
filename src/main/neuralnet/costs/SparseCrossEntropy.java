@@ -5,10 +5,12 @@ import com.aparapi.Range;
 import main.neuralnet.activations.Activation;
 import main.neuralnet.activations.ActivationType;
 
+import java.util.stream.IntStream;
+
 /**
  * The cross entropy loss is given by <code>sum(target * log(output))</code>
  */
-public class SparseCrossEntropy implements Cost{
+public class SparseCrossEntropy implements Cost {
 	private DeltaKernel deltaKernel;
 
 	SparseCrossEntropy() {
@@ -28,10 +30,17 @@ public class SparseCrossEntropy implements Cost{
 
 	public double[][] derivative(double[][] output, double[][] target, Activation activation) {
 		double[][] delta = new double[output.length][output[0].length];
-
 		double[][] derivative = activation.derivative(output);
-		deltaKernel.init(output, target, derivative, delta, (byte) (activation.getType() == ActivationType.SOFTMAX ? 1 : 0));
-		deltaKernel.execute(Range.create2D(output.length, output[0].length));
+
+		if (activation.getType() == ActivationType.SOFTMAX) {
+			deltaKernel.init(output, target, derivative, delta);
+			deltaKernel.execute(Range.create2D(output.length, output[0].length));
+		} else {
+			IntStream.range(0, output.length).parallel().forEach(b -> {
+				int i = (int) target[b][0];
+				delta[b][i] = (-1 / output[b][i]) * derivative[b][i];
+			});
+		}
 
 		return delta;
 	}
@@ -40,15 +49,13 @@ public class SparseCrossEntropy implements Cost{
 	 * The DeltaKernel calculates the delta of an output layer.
 	 */
 	class DeltaKernel extends Kernel {
-		private byte softmax;
 		private double[][] output, target, derivative, delta;
 
-		void init(double[][] output, double[][] target, double[][] derivative, double[][] delta, byte softmax) {
+		void init(double[][] output, double[][] target, double[][] derivative, double[][] delta) {
 			this.output = output;
 			this.target = target;
 			this.derivative = derivative;
 			this.delta = delta;
-			this.softmax = softmax;
 		}
 
 		public void run() {
@@ -58,15 +65,9 @@ public class SparseCrossEntropy implements Cost{
 			if (target[b].length > 1 || target[b][0] > output[b].length)
 				throw new IllegalArgumentException();
 
-			if (softmax == 1) {
-				delta[b][i] = output[b][i]; // softmax derivative simplifies to this
-				if (i == target[b][0]) {
-					delta[b][i] -= 1;
-				}
-			} else {
-				if (i == target[b][0]) {
-					delta[b][i] = (-1 / output[b][i]) * derivative[b][i];
-				}
+			delta[b][i] = output[b][i]; // softmax derivative simplifies to this
+			if (i == target[b][0]) {
+				delta[b][i] -= 1;
 			}
 		}
 	}
