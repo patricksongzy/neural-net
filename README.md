@@ -1,5 +1,5 @@
 # neural-net
-A neural network implementation in java.
+A neural network implementation in Java. This implementation passes gradient checks, but does not guaranty accuracy. This project has no commit history, because it was copied off of one of my private repositories.
 ## Project
 This project includes:
 * Convolutional, Feed-Forward, Down-Sampling/Pooling, Dropout and GRU layers.
