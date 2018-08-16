@@ -1,5 +1,5 @@
 # neural-net
-A neural network implementation in Java. This implementation passes gradient checks, but does not guarantee accuracy.
+A neural network implementation in Java. This implementation passes the current tests that have been implemented.
 ## Project
 This project includes:
 * Convolutional, Feed-Forward, Down-Sampling/Pooling, Dropout and GRU layers.
@@ -15,4 +15,4 @@ This project includes:
 * This project does not use a matrix multiplication library for clarity.
 
 ## Requirements
-This project requires [Aparapi](https://github.com/Syncleus/aparapi), created by AMD, forked by freemo.
+This project requires [AMD's Aparapi](https://github.com/aparapi/aparapi/releases). Since this repository does not distribute it in any form, the license is not included and can be viewed on the linked Github page. This project originally used Freemo's fork of Aparapi, but since the forker changed the license (from the one which AMD's Aparapi was originally released on), it now uses AMD's Aparapi. AMD's Aparapi is released on a permissive license, meaning that this project can be released under the MIT license.
