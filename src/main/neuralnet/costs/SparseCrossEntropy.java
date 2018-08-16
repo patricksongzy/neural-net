@@ -11,12 +11,6 @@ import java.util.stream.IntStream;
  * The cross entropy loss is given by <code>sum(target * log(output))</code>
  */
 public class SparseCrossEntropy implements Cost {
-	private DeltaKernel deltaKernel;
-
-	SparseCrossEntropy() {
-		deltaKernel = new DeltaKernel();
-	}
-
 	public CostType getType() {
 		return CostType.CROSS_ENTROPY;
 	}
@@ -33,8 +27,10 @@ public class SparseCrossEntropy implements Cost {
 		double[][] derivative = activation.derivative(output);
 
 		if (activation.getType() == ActivationType.SOFTMAX) {
-			deltaKernel.init(output, target, delta);
-			deltaKernel.execute(Range.create2D(output.length, output[0].length));
+			IntStream.range(0, output.length).parallel().forEach(b -> {
+				System.arraycopy(output[b], 0, delta[b], 0, output[0].length);
+				delta[b][(int) target[b][0]] -= 1;
+			});
 		} else {
 			IntStream.range(0, output.length).parallel().forEach(b -> {
 				int i = (int) target[b][0];
@@ -43,31 +39,5 @@ public class SparseCrossEntropy implements Cost {
 		}
 
 		return delta;
-	}
-
-	/**
-	 * The DeltaKernel calculates the delta of an output layer.
-	 */
-	class DeltaKernel extends Kernel {
-		private double[][] output, target, delta;
-
-		void init(double[][] output, double[][] target, double[][] delta) {
-			this.output = output;
-			this.target = target;
-			this.delta = delta;
-		}
-
-		public void run() {
-			int b = getGlobalId(0); // batch
-			int i = getGlobalId(1); // index
-
-			if (target[b].length > 1 || target[b][0] > output[b].length)
-				throw new IllegalArgumentException();
-
-			delta[b][i] = output[b][i]; // softmax derivative simplifies to this
-			if (i == target[b][0]) {
-				delta[b][i] -= 1;
-			}
-		}
 	}
 }

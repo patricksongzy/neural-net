@@ -23,7 +23,7 @@ public class Pooling implements Layer {
 	private int downsampleSize, downsampleStride;
 
 	private byte[][] switches;
-	private double[][] output, upsampled;
+	private double[][] output;
 
 	private Pooling(int downsampleSize, int downsampleStride) {
 		this.downsampleSize = downsampleSize;
@@ -39,8 +39,8 @@ public class Pooling implements Layer {
 		downsampleSize = dis.readInt();
 		downsampleStride = dis.readInt();
 
-		downsampleKernel = new DownsampleKernel(downsampleStride, downsampleSize, inputHeight, downsampleHeight);
-		upsampleKernel = new UpsampleKernel(downsampleStride, downsampleHeight, downsampleWidth, downsampleSize, inputHeight, inputWidth);
+		downsampleKernel = new DownsampleKernel(downsampleStride, downsampleSize, inputWidth, inputHeight, downsampleWidth, downsampleHeight);
+		upsampleKernel = new UpsampleKernel(downsampleStride, downsampleWidth, downsampleHeight, downsampleSize, inputWidth, inputHeight);
 	}
 
 	public void setMode(Mode mode) {
@@ -60,8 +60,8 @@ public class Pooling implements Layer {
 		this.downsampleWidth = (inputWidth - downsampleSize) / downsampleStride + 1;
 		this.downsampleHeight = (inputHeight - downsampleSize) / downsampleStride + 1;
 
-		downsampleKernel = new DownsampleKernel(downsampleStride, downsampleSize, inputHeight, downsampleHeight);
-		upsampleKernel = new UpsampleKernel(downsampleStride, downsampleHeight, downsampleWidth, downsampleSize, inputHeight, inputWidth);
+		downsampleKernel = new DownsampleKernel(downsampleStride, downsampleSize, inputWidth, inputHeight, downsampleWidth, downsampleHeight);
+		upsampleKernel = new UpsampleKernel(downsampleStride, downsampleWidth, downsampleHeight, downsampleSize, inputWidth, inputHeight);
 	}
 
 	public double[][] forward(double[][] x) {
@@ -75,17 +75,13 @@ public class Pooling implements Layer {
 	}
 
 	public double[][] backward(Cost cost, double[][] target) {
-		upsampled = new double[target.length][filterAmount * inputHeight * inputWidth];
 		double[][] delta = cost.derivative(output, target, new Identity());
 
-		upsampleKernel.init(switches, upsampled, delta);
-		upsampleKernel.execute(Range.create3D(filterAmount, downsampleHeight, downsampleWidth), target.length);
-
-		return upsampled;
+		return backward(delta);
 	}
 
 	public double[][] backward(double[][] previousDelta) {
-		upsampled = new double[output.length][filterAmount * inputHeight * inputWidth];
+		double[][] upsampled = new double[output.length][filterAmount * inputHeight * inputWidth];
 
 		upsampleKernel.init(switches, upsampled, previousDelta);
 		upsampleKernel.execute(Range.create3D(filterAmount, downsampleHeight, downsampleWidth), output.length);
@@ -137,14 +133,16 @@ public class Pooling implements Layer {
 	}
 
 	class DownsampleKernel extends Kernel {
-		private int downsampleStride, downsampleSize, inputHeight, downsampleHeight;
+		private int downsampleStride, downsampleSize, inputWidth, inputHeight, downsampleWidth, downsampleHeight;
 		private byte[][] switches;
 		private double[][] input, downsampled;
 
-		DownsampleKernel(int downsampleStride, int downsampleSize, int inputHeight, int downsampleHeight) {
+		DownsampleKernel(int downsampleStride, int downsampleSize, int inputWidth, int inputHeight, int downsampleWidth, int downsampleHeight) {
 			this.downsampleStride = downsampleStride;
 			this.downsampleSize = downsampleSize;
+			this.inputWidth = inputWidth;
 			this.inputHeight = inputHeight;
+			this.downsampleWidth = downsampleWidth;
 			this.downsampleHeight = downsampleHeight;
 		}
 
@@ -191,7 +189,7 @@ public class Pooling implements Layer {
 		private byte[][] switches;
 		private double[][] upsampled, delta;
 
-		UpsampleKernel(int downsampleStride, int downsampleHeight, int downsampleWidth, int downsampleSize, int inputHeight, int inputWidth) {
+		UpsampleKernel(int downsampleStride, int downsampleWidth, int downsampleHeight, int downsampleSize, int inputWidth, int inputHeight) {
 			this.downsampleStride = downsampleStride;
 			this.downsampleHeight = downsampleHeight;
 			this.downsampleWidth = downsampleWidth;

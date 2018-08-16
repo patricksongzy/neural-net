@@ -13,7 +13,6 @@ import main.neuralnet.optimizers.UpdaterType;
 import java.io.DataInputStream;
 import java.io.DataOutputStream;
 import java.io.IOException;
-import java.util.Arrays;
 import java.util.stream.IntStream;
 
 /**
@@ -177,8 +176,6 @@ public class FeedForward implements Layer {
 				previousDelta[b][i] *= output[b][i];
 			}
 		}
-
-		System.out.println(Arrays.toString(previousDelta[0]));
 
 		for (int i = 0; i < outputSize; i++) {
 			for (double[] d : previousDelta) {
