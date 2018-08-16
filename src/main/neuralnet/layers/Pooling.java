@@ -111,6 +111,7 @@ public class Pooling implements Layer {
 		return LayerType.POOLING;
 	}
 
+	@SuppressWarnings("unused")
 	public static class Builder {
 		private int downsampleSize, downsampleStride;
 

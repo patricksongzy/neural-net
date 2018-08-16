@@ -85,6 +85,7 @@ public class Dropout implements Layer {
 	/**
 	 * Builder for Dropout layers.
 	 */
+	@SuppressWarnings("unused")
 	public static class Builder {
 		private double dropout = 0.5;
 

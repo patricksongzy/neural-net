@@ -262,6 +262,7 @@ public class FeedForward implements Layer {
 	/**
 	 * Builder for FeedForward layers.
 	 */
+	@SuppressWarnings("unused")
 	public static class Builder {
 		private int outputSize;
 		private double temperature;

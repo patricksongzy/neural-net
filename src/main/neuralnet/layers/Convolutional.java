@@ -343,6 +343,7 @@ public class Convolutional implements Layer {
 	/**
 	 * Builder for Convolutional layers.
 	 */
+	@SuppressWarnings("unused")
 	public static class Builder {
 		private int pad;
 		private int stride;

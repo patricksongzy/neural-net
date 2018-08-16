@@ -1,5 +1,7 @@
 package main.neuralnet.layers;
 
+import com.amd.aparapi.Kernel;
+import com.amd.aparapi.Range;
 import main.neuralnet.activations.Activation;
 import main.neuralnet.activations.ActivationType;
 import main.neuralnet.activations.Identity;
@@ -16,6 +18,12 @@ import java.util.concurrent.ThreadLocalRandom;
 import java.util.stream.IntStream;
 
 public class GRU implements Layer {
+	private HiddenKernel hiddenKernel;
+	private WeightGradientKernel weightGradientKernel;
+	private StateGradientKernel stateGradientKernel;
+	private HiddenDeltaKernel hiddenDeltaKernel;
+	private DeltaKernel deltaKernel;
+
 	private Mode mode = Mode.TRAIN;
 	private double[] wz, wr, w;
 	private double[] dWz, dWr, dW;
@@ -34,7 +42,7 @@ public class GRU implements Layer {
 	private Activation hiddenActivation, activation;
 
 	private GRU(int hiddenSize, Initializer initializer, UpdaterType updaterType,
-			   ActivationType hiddenActivation, ActivationType activation) {
+				ActivationType hiddenActivation, ActivationType activation) {
 		this.hiddenSize = hiddenSize;
 		this.hiddenActivation = hiddenActivation.create();
 		this.activation = activation.create();
@@ -55,63 +63,6 @@ public class GRU implements Layer {
 			uz[i] = initializer.initialize(hiddenSize);
 			ur[i] = initializer.initialize(hiddenSize);
 			u[i] = initializer.initialize(hiddenSize);
-		}
-	}
-
-	public static class Builder {
-		private int hiddenSize;
-		private Initializer initializer;
-		private ActivationType hiddenActivation;
-		private ActivationType activation;
-		private UpdaterType updaterType;
-
-		public Builder() {
-			initializer = new HeInitialization();
-			hiddenActivation = ActivationType.SIGMOID;
-			activation = ActivationType.TANH;
-			updaterType = UpdaterType.ADAM;
-		}
-
-		public Builder hiddenSize(int hiddenSize) {
-			this.hiddenSize = hiddenSize;
-
-			return this;
-		}
-
-		public Builder activation(ActivationType hiddenActivation, ActivationType activation) {
-			if (hiddenActivation != null && activation != null) {
-				this.hiddenActivation = hiddenActivation;
-				this.activation = activation;
-			} else {
-				throw new IllegalArgumentException();
-			}
-
-			return this;
-		}
-
-		public Builder initializer(Initializer initializer) {
-			if (initializer != null)
-				this.initializer = initializer;
-			else
-				throw new IllegalArgumentException();
-
-			return this;
-		}
-
-		public Builder updaterType(UpdaterType updaterType) {
-			if (updaterType != null)
-				this.updaterType = updaterType;
-			else
-				throw new IllegalArgumentException();
-
-			return this;
-		}
-
-		public GRU build() {
-			if (hiddenSize > 0)
-				return new GRU(hiddenSize, initializer, updaterType, hiddenActivation, activation);
-
-			throw new IllegalArgumentException();
 		}
 	}
 
@@ -191,10 +142,16 @@ public class GRU implements Layer {
 			wr[i] = initializer.initialize(inputSize);
 			w[i] = initializer.initialize(inputSize);
 		}
+
+		hiddenKernel = new HiddenKernel(inputSize, hiddenSize);
+		weightGradientKernel = new WeightGradientKernel(inputSize);
+		stateGradientKernel = new StateGradientKernel(hiddenSize);
+		hiddenDeltaKernel = new HiddenDeltaKernel(hiddenSize);
+		deltaKernel = new DeltaKernel(inputSize);
 	}
 
 	public int[] getOutputDimensions() {
-		return new int[] { hiddenSize };
+		return new int[]{hiddenSize};
 	}
 
 	public void export(DataOutputStream dos) throws IOException {
@@ -363,52 +320,26 @@ public class GRU implements Layer {
 				dhc[i] = dh[i] * (1 - z[time][i]) * derivative[time][i];
 			});
 
-			IntStream.range(0, hiddenSize).parallel().forEach(i -> {
-				double dot = 0;
+			hiddenKernel.init(time, w, u, dr, dz, dh, dhc, h, z, r, hc, drActivation, dzActivation, dx);
+			hiddenKernel.execute(Range.create(hiddenSize));
 
-				for (int j = 0; j < hiddenSize; j++) {
-					dot += u[i + hiddenSize * j] * dhc[j];
-				}
+			hiddenDeltaKernel.init(dh, uz, ur, dz, dr);
+			hiddenDeltaKernel.execute(Range.create2D(hiddenSize, hiddenSize));
 
-				dr[i] = h[time][i] * dot * drActivation[time][i];
-				dz[i] = dh[i] * (h[time][i] - hc[time][i]) * dzActivation[time][i];
-
-				dh[i] = dh[i] * z[time][i] + r[time][i] * dot;
-
-				for (int j = 0; j < inputSize; j++) {
-					dx[time][j] += w[j + inputSize * i] * dhc[i];
-				}
-			});
-
-			IntStream.range(0, hiddenSize).parallel().forEach(i -> {
-				for (int j = 0; j < hiddenSize; j++) {
-					dh[i] += uz[i + hiddenSize * j] * dz[j];
-					dh[i] += ur[i + hiddenSize * j] * dr[j];
-				}
-
-				for (int j = 0; j < inputSize; j++) {
-					dx[time][j] += wz[j + inputSize * i] * dz[i];
-					dx[time][j] += wr[j + inputSize * i] * dr[i];
-				}
-			});
+			deltaKernel.init(time, wz, wr, dz, dr, dx);
+			deltaKernel.execute(Range.create2D(hiddenSize, inputSize));
 
 			double[] product = new double[hiddenSize];
 
 			IntStream.range(0, hiddenSize).parallel().forEach(i -> product[i] = r[time][i] * h[time][i]);
 
+			weightGradientKernel.init(time, dr, dz, dhc, dWr, dWz, dW, x);
+			weightGradientKernel.execute(Range.create2D(hiddenSize, inputSize));
+
+			stateGradientKernel.init(time, dr, dz, dhc, dUr, dUz, dU, product, h);
+			stateGradientKernel.execute(Range.create2D(hiddenSize, hiddenSize));
+
 			IntStream.range(0, hiddenSize).parallel().forEach(i -> {
-				for (int j = 0; j < inputSize; j++) {
-					dWr[j + inputSize * i] += dr[i] * x[time][j];
-					dWz[j + inputSize * i] += dz[i] * x[time][j];
-					dW[j + inputSize * i] += dhc[i] * x[time][j];
-				}
-
-				for (int j = 0; j < hiddenSize; j++) {
-					dUr[j + hiddenSize * i] += dr[i] * h[time][j];
-					dUz[j + hiddenSize * i] += dz[i] * h[time][j];
-					dU[j + hiddenSize * i] += dhc[i] * product[j];
-				}
-
 				dBr[i] += dr[i];
 				dBz[i] += dz[i];
 				dB[i] += dhc[i];
@@ -417,6 +348,59 @@ public class GRU implements Layer {
 
 		if (mode == Mode.TRAIN)
 			update();
+	}
+
+	class HiddenDeltaKernel extends Kernel {
+		private int hiddenSize;
+		private double[] dh, uz, ur, dz, dr;
+
+		HiddenDeltaKernel(int hiddenSize) {
+			this.hiddenSize = hiddenSize;
+		}
+
+		void init(double[] dh, double[] uz, double[] ur, double[] dz, double[] dr) {
+			this.dh = dh;
+			this.uz = uz;
+			this.ur = ur;
+			this.dz = dz;
+			this.dr = dr;
+		}
+
+		public void run() {
+			int i = getGlobalId(0);
+			int j = getGlobalId(1);
+
+			dh[i] += uz[i + hiddenSize * j] * dz[j];
+			dh[i] += ur[i + hiddenSize * j] * dr[j];
+		}
+	}
+
+	class DeltaKernel extends Kernel {
+		private int inputSize;
+		private int time;
+		private double[] wz, wr, dz, dr;
+		private double[][] dx;
+
+		DeltaKernel(int inputSize) {
+			this.inputSize = inputSize;
+		}
+
+		void init(int time, double[] wz, double[] wr, double[] dz, double[] dr, double[][] dx) {
+			this.time = time;
+			this.wz = wz;
+			this.wr = wr;
+			this.dz = dz;
+			this.dr = dr;
+			this.dx = dx;
+		}
+
+		public void run() {
+			int i = getGlobalId(0);
+			int j = getGlobalId(1);
+
+			dx[time][j] += wz[j + inputSize * i] * dz[i];
+			dx[time][j] += wr[j + inputSize * i] * dr[i];
+		}
 	}
 
 	public double[][][] getParameters() {
@@ -442,6 +426,178 @@ public class GRU implements Layer {
 			bz[i] += updaters[position++].update(dBz[i] / x.length);
 			br[i] += updaters[position++].update(dBr[i] / x.length);
 			b[i] += updaters[position++].update(dB[i] / x.length);
+		}
+	}
+
+	@SuppressWarnings("unused")
+	public static class Builder {
+		private int hiddenSize;
+		private Initializer initializer;
+		private ActivationType hiddenActivation;
+		private ActivationType activation;
+		private UpdaterType updaterType;
+
+		public Builder() {
+			initializer = new HeInitialization();
+			hiddenActivation = ActivationType.SIGMOID;
+			activation = ActivationType.TANH;
+			updaterType = UpdaterType.ADAM;
+		}
+
+		public Builder hiddenSize(int hiddenSize) {
+			this.hiddenSize = hiddenSize;
+
+			return this;
+		}
+
+		public Builder activation(ActivationType hiddenActivation, ActivationType activation) {
+			if (hiddenActivation != null && activation != null) {
+				this.hiddenActivation = hiddenActivation;
+				this.activation = activation;
+			} else {
+				throw new IllegalArgumentException();
+			}
+
+			return this;
+		}
+
+		public Builder initializer(Initializer initializer) {
+			if (initializer != null)
+				this.initializer = initializer;
+			else
+				throw new IllegalArgumentException();
+
+			return this;
+		}
+
+		public Builder updaterType(UpdaterType updaterType) {
+			if (updaterType != null)
+				this.updaterType = updaterType;
+			else
+				throw new IllegalArgumentException();
+
+			return this;
+		}
+
+		public GRU build() {
+			if (hiddenSize > 0)
+				return new GRU(hiddenSize, initializer, updaterType, hiddenActivation, activation);
+
+			throw new IllegalArgumentException();
+		}
+	}
+
+	class WeightGradientKernel extends Kernel {
+		private int inputSize;
+		private int time;
+		private double[] dr, dz, dhc, dWr, dWz, dW;
+		private double[][] x;
+
+		WeightGradientKernel(int inputSize) {
+			this.inputSize = inputSize;
+		}
+
+		void init(int time, double[] dr, double[] dz, double[] dhc, double[] dWr, double[] dWz, double[] dW, double[][] x) {
+			this.time = time;
+			this.dr = dr;
+			this.dz = dz;
+			this.dhc = dhc;
+			this.dWr = dWr;
+			this.dWz = dWz;
+			this.dW = dW;
+			this.x = x;
+		}
+
+		public void run() {
+			int i = getGlobalId(0);
+			int j = getGlobalId(1);
+
+			dWr[j + inputSize * i] += dr[i] * x[time][j];
+			dWz[j + inputSize * i] += dz[i] * x[time][j];
+			dW[j + inputSize * i] += dhc[i] * x[time][j];
+		}
+	}
+
+	class StateGradientKernel extends Kernel {
+		private int hiddenSize;
+		private int time;
+		private double[] dr, dz, dhc, dUr, dUz, dU, product;
+		private double[][] h;
+
+		StateGradientKernel(int hiddenSize) {
+			this.hiddenSize = hiddenSize;
+		}
+
+		void init(int time, double[] dr, double[] dz, double[] dhc, double[] dUr, double[] dUz, double[] dU, double[] product, double[][] h) {
+			this.time = time;
+			this.dr = dr;
+			this.dz = dz;
+			this.dhc = dhc;
+			this.dUr = dUr;
+			this.dUz = dUz;
+			this.dU = dU;
+			this.product = product;
+			this.h = h;
+		}
+
+		public void run() {
+			int i = getGlobalId(0);
+			int j = getGlobalId(1);
+
+			dUr[j + hiddenSize * i] += dr[i] * h[time][j];
+			dUz[j + hiddenSize * i] += dz[i] * h[time][j];
+			dU[j + hiddenSize * i] += dhc[i] * product[j];
+		}
+	}
+
+	class HiddenKernel extends Kernel {
+		private int inputSize, hiddenSize;
+		private int time;
+		private double[] w, u;
+		private double[] dr, dz, dh, dhc;
+		private double[][] h, z, r, hc;
+		private double[][] drActivation, dzActivation, dx;
+
+		HiddenKernel(int inputSize, int hiddenSize) {
+			this.inputSize = inputSize;
+			this.hiddenSize = hiddenSize;
+		}
+
+		void init(int time, double[] w, double[] u, double[] dr, double[] dz, double[] dh, double[] dhc, double[][] h, double[][] z, double[][] r,
+				  double[][] hc, double[][] drActivation, double[][] dzActivation, double[][] dx) {
+			this.time = time;
+			this.w = w;
+			this.u = u;
+			this.dr = dr;
+			this.dz = dz;
+			this.dh = dh;
+			this.dhc = dhc;
+			this.h = h;
+			this.z = z;
+			this.r = r;
+			this.hc = hc;
+			this.drActivation = drActivation;
+			this.dzActivation = dzActivation;
+			this.dx = dx;
+		}
+
+		public void run() {
+			int i = getGlobalId();
+
+			double dot = 0;
+
+			for (int j = 0; j < hiddenSize; j++) {
+				dot += u[i + hiddenSize * j] * dhc[j];
+			}
+
+			dr[i] = h[time][i] * dot * drActivation[time][i];
+			dz[i] = dh[i] * (h[time][i] - hc[time][i]) * dzActivation[time][i];
+
+			dh[i] = dh[i] * z[time][i] + r[time][i] * dot;
+
+			for (int j = 0; j < inputSize; j++) {
+				dx[time][j] += w[j + inputSize * i] * dhc[i];
+			}
 		}
 	}
 }
