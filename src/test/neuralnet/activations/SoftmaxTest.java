@@ -2,13 +2,9 @@ package test.neuralnet.activations;
 
 import main.neuralnet.activations.Activation;
 import main.neuralnet.activations.ActivationType;
-import main.neuralnet.activations.Softmax;
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
-import java.util.Arrays;
-
-import static org.junit.jupiter.api.Assertions.*;
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 
 class SoftmaxTest {
 	private Activation softmax = ActivationType.SOFTMAX.create();

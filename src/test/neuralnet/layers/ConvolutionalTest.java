@@ -8,10 +8,10 @@ import main.neuralnet.layers.Convolutional;
 import main.neuralnet.optimizers.UpdaterType;
 import org.junit.jupiter.api.Test;
 
-import java.util.Arrays;
 import java.util.concurrent.ThreadLocalRandom;
 
-import static org.junit.jupiter.api.Assertions.*;
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class ConvolutionalTest {
 	@Test

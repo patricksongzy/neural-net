@@ -350,59 +350,6 @@ public class GRU implements Layer {
 			update();
 	}
 
-	class HiddenDeltaKernel extends Kernel {
-		private int hiddenSize;
-		private double[] dh, uz, ur, dz, dr;
-
-		HiddenDeltaKernel(int hiddenSize) {
-			this.hiddenSize = hiddenSize;
-		}
-
-		void init(double[] dh, double[] uz, double[] ur, double[] dz, double[] dr) {
-			this.dh = dh;
-			this.uz = uz;
-			this.ur = ur;
-			this.dz = dz;
-			this.dr = dr;
-		}
-
-		public void run() {
-			int i = getGlobalId(0);
-			int j = getGlobalId(1);
-
-			dh[i] += uz[i + hiddenSize * j] * dz[j];
-			dh[i] += ur[i + hiddenSize * j] * dr[j];
-		}
-	}
-
-	class DeltaKernel extends Kernel {
-		private int inputSize;
-		private int time;
-		private double[] wz, wr, dz, dr;
-		private double[][] dx;
-
-		DeltaKernel(int inputSize) {
-			this.inputSize = inputSize;
-		}
-
-		void init(int time, double[] wz, double[] wr, double[] dz, double[] dr, double[][] dx) {
-			this.time = time;
-			this.wz = wz;
-			this.wr = wr;
-			this.dz = dz;
-			this.dr = dr;
-			this.dx = dx;
-		}
-
-		public void run() {
-			int i = getGlobalId(0);
-			int j = getGlobalId(1);
-
-			dx[time][j] += wz[j + inputSize * i] * dz[i];
-			dx[time][j] += wr[j + inputSize * i] * dr[i];
-		}
-	}
-
 	public double[][][] getParameters() {
 		return new double[][][]{{wz, dWz}, {wr, dWr}, {w, dW}, {uz, dUz}, {ur, dUr}, {u, dU}, {bz, dBz}, {br, dBr}, {b, dB}};
 	}
@@ -487,6 +434,59 @@ public class GRU implements Layer {
 		}
 	}
 
+	class HiddenDeltaKernel extends Kernel {
+		private int hiddenSize;
+		private double[] dh, uz, ur, dz, dr;
+
+		HiddenDeltaKernel(int hiddenSize) {
+			this.hiddenSize = hiddenSize;
+		}
+
+		void init(double[] dh, double[] uz, double[] ur, double[] dz, double[] dr) {
+			this.dh = dh;
+			this.uz = uz;
+			this.ur = ur;
+			this.dz = dz;
+			this.dr = dr;
+		}
+
+		public void run() {
+			int i = getGlobalId(0);
+			int j = getGlobalId(1);
+
+			dh[i] += uz[i + hiddenSize * j] * dz[j];
+			dh[i] += ur[i + hiddenSize * j] * dr[j];
+		}
+	}
+
+	class DeltaKernel extends Kernel {
+		private int inputSize;
+		private int time;
+		private double[] wz, wr, dz, dr;
+		private double[][] dx;
+
+		DeltaKernel(int inputSize) {
+			this.inputSize = inputSize;
+		}
+
+		void init(int time, double[] wz, double[] wr, double[] dz, double[] dr, double[][] dx) {
+			this.time = time;
+			this.wz = wz;
+			this.wr = wr;
+			this.dz = dz;
+			this.dr = dr;
+			this.dx = dx;
+		}
+
+		public void run() {
+			int i = getGlobalId(0);
+			int j = getGlobalId(1);
+
+			dx[time][j] += wz[j + inputSize * i] * dz[i];
+			dx[time][j] += wr[j + inputSize * i] * dr[i];
+		}
+	}
+
 	class WeightGradientKernel extends Kernel {
 		private int inputSize;
 		private int time;
@@ -528,7 +528,8 @@ public class GRU implements Layer {
 			this.hiddenSize = hiddenSize;
 		}
 
-		void init(int time, double[] dr, double[] dz, double[] dhc, double[] dUr, double[] dUz, double[] dU, double[] product, double[][] h) {
+		void init(int time, double[] dr, double[] dz, double[] dhc, double[] dUr, double[] dUz, double[] dU, double[] product,
+				  double[][] h) {
 			this.time = time;
 			this.dr = dr;
 			this.dz = dz;
@@ -563,8 +564,8 @@ public class GRU implements Layer {
 			this.hiddenSize = hiddenSize;
 		}
 
-		void init(int time, double[] w, double[] u, double[] dr, double[] dz, double[] dh, double[] dhc, double[][] h, double[][] z, double[][] r,
-				  double[][] hc, double[][] drActivation, double[][] dzActivation, double[][] dx) {
+		void init(int time, double[] w, double[] u, double[] dr, double[] dz, double[] dh, double[] dhc, double[][] h, double[][] z,
+				  double[][] r, double[][] hc, double[][] drActivation, double[][] dzActivation, double[][] dx) {
 			this.time = time;
 			this.w = w;
 			this.u = u;

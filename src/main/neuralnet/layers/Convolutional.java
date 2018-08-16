@@ -276,7 +276,7 @@ public class Convolutional implements Layer {
 	/**
 	 * Update the parameters given gradients.
 	 *
-	 * @param delta the bias gradient
+	 * @param delta    the bias gradient
 	 * @param gradient the weight gradient
 	 */
 	private void update(double[] delta, double[] gradient) {
@@ -296,7 +296,7 @@ public class Convolutional implements Layer {
 	}
 
 	public double[][][] getParameters() {
-		return new double[][][] {{filters, gradient}, {biases, biasGradient}};
+		return new double[][][]{{filters, gradient}, {biases, biasGradient}};
 	}
 
 	public void export(DataOutputStream dos) throws IOException {
@@ -459,8 +459,8 @@ public class Convolutional implements Layer {
 		private double[] filters, biases;
 		private double[][] input, preActivated;
 
-		ConvolutionKernel(int padWidth, int padHeight, int depth, int stride, int outputWidth, int outputHeight, int filterSize, int
-				filterAmount) {
+		ConvolutionKernel(int padWidth, int padHeight, int depth, int stride, int outputWidth, int outputHeight, int filterSize,
+						  int filterAmount) {
 			this.padWidth = padWidth;
 			this.padHeight = padHeight;
 			this.depth = depth;
@@ -573,8 +573,8 @@ public class Convolutional implements Layer {
 		private double[] filters;
 		private double[][] delta, previousDelta;
 
-		DeltaKernel(int padWidth, int padHeight, int depth, int outputWidth, int outputHeight, int filterSize, int filterAmount, int
-				stride) {
+		DeltaKernel(int padWidth, int padHeight, int depth, int outputWidth, int outputHeight, int filterSize, int filterAmount,
+					int stride) {
 			this.padWidth = padWidth;
 			this.padHeight = padHeight;
 			this.depth = depth;

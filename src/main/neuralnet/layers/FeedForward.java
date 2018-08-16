@@ -208,7 +208,7 @@ public class FeedForward implements Layer {
 		});
 
 		if (mode == Mode.TRAIN) {
-			// updating paramters
+			// updating parameters
 			update(gradient);
 		}
 	}
