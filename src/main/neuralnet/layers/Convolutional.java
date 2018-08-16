@@ -1,7 +1,7 @@
 package main.neuralnet.layers;
 
-import com.aparapi.Kernel;
-import com.aparapi.Range;
+import com.amd.aparapi.Kernel;
+import com.amd.aparapi.Range;
 import main.neuralnet.activations.Activation;
 import main.neuralnet.activations.ActivationType;
 import main.neuralnet.costs.Cost;
@@ -13,7 +13,6 @@ import main.neuralnet.optimizers.UpdaterType;
 import java.io.DataInputStream;
 import java.io.DataOutputStream;
 import java.io.IOException;
-import java.util.Arrays;
 import java.util.stream.IntStream;
 
 /**

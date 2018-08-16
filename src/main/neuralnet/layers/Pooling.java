@@ -1,7 +1,7 @@
 package main.neuralnet.layers;
 
-import com.aparapi.Kernel;
-import com.aparapi.Range;
+import com.amd.aparapi.Kernel;
+import com.amd.aparapi.Range;
 import main.neuralnet.activations.Identity;
 import main.neuralnet.costs.Cost;
 
