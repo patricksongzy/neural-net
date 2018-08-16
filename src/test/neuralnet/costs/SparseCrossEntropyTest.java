@@ -1,4 +1,4 @@
-package test.neuralnet.layers;
+package test.neuralnet.costs;
 
 import main.neuralnet.activations.ActivationType;
 import main.neuralnet.costs.Cost;
