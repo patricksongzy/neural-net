@@ -26,6 +26,8 @@ public class MeanSquareError implements Cost {
 
 	public double[][] derivative(double[][] output, double[][] target, Activation activation) {
 		double[][] delta = new double[output.length][output[0].length];
+		System.out.println(output[0].length);
+		System.out.println(target[0].length);
 
 		double[][] derivative = activation.derivative(output);
 		deltaKernel.init(output, target, derivative, delta, (byte) (activation.getType() == ActivationType.SOFTMAX ? 1 : 0));

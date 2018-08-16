@@ -8,9 +8,7 @@ public class Sigmoid implements Activation{
 	}
 
 	public void activation(double[] x) {
-		IntStream.range(0, x.length).parallel().forEach(i -> {
-			x[i] = 1 / (1 + Math.exp(-x[i]));
-		});
+		IntStream.range(0, x.length).parallel().forEach(i -> x[i] = 1 / (1 + Math.exp(-x[i])));
 	}
 
 	public void activation(double[][] x) {

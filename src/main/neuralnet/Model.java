@@ -11,7 +11,6 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.ThreadLocalRandom;
 
 /**
  * Models represent neural network models. They forward and back propagate layers.
@@ -129,6 +128,7 @@ public class Model {
 
 		List<double[]> keys = new ArrayList<>(data.keySet());
 
+		// noinspection IntegerDivisionInFloatingPointContext
 		plot.init(epochs, keys.size() / batchSize + ((keys.size() % batchSize) > 0 ? 1 : 0));
 
 		int x = 0;
@@ -169,8 +169,6 @@ public class Model {
 					export(name);
 			}
 		}
-
-		setMode(Layer.Mode.EVAL);
 	}
 
 	/**
@@ -244,8 +242,6 @@ public class Model {
 			if (i % interval == 0)
 				export(name);
 		}
-
-		setMode(Layer.Mode.EVAL);
 	}
 
 	/**
@@ -255,7 +251,7 @@ public class Model {
 	 * @param input  the input
 	 * @param target the target
 	 */
-	public void gradientCheck(double[][] input, double[][] target) {
+	public boolean gradientCheck(double[][] input, double[][] target) {
 		setMode(Layer.Mode.GRADIENT_CHECK);
 
 		forward(input);
@@ -272,7 +268,8 @@ public class Model {
 		}
 
 		System.out.println("pass: " + pass);
-		setMode(Layer.Mode.TRAIN);
+
+		return pass;
 	}
 
 	private boolean checkParameters(double[] parameters, double[] gradient, double[][] x, double[][] target) {

@@ -6,7 +6,7 @@ import java.awt.geom.Line2D;
 import java.util.ArrayList;
 import java.util.List;
 
-public class Plot extends JPanel {
+class Plot extends JPanel {
 	private static final Font FONT = new Font("Ubuntu Mono", Font.PLAIN, 16);
 	private StringBuilder progress;
 	private List<double[]> positions = new ArrayList<>();

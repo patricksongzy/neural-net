@@ -13,6 +13,7 @@ import main.neuralnet.optimizers.UpdaterType;
 import java.io.DataInputStream;
 import java.io.DataOutputStream;
 import java.io.IOException;
+import java.util.Arrays;
 import java.util.stream.IntStream;
 
 /**
@@ -166,33 +167,32 @@ public class Convolutional implements Layer {
 	 * Pads the input.
 	 *
 	 * @param x the input
-	 * @param pad the pad amount
 	 * @return the padded input
 	 */
-	private double[][] pad(double[][] x, int pad) {
+	public double[][] pad(double[][] x) {
 		if (pad > 0) {
 			// creating an array, with the dimensions of the padded input
 			double[][] out = new double[x.length][depth * padHeight * padWidth];
 
 			// padding the array
 			for (int i = 0; i < x.length; i++) {
-				int offset = 0;
-				int index = 0;
+				int j = 0;
+
 				for (int d = 0; d < depth; d++) {
-					offset += padWidth;
+					int offset = 0;
+					int index = 0;
+
+					offset += padWidth * pad;
 
 					for (int h = 0; h < inputHeight; h++) {
 						offset += pad;
 
 						for (int w = 0; w < inputWidth; w++) {
-							out[i][index + offset] = x[i][index];
-							index++;
+							out[i][d * padHeight * padWidth + index++ + offset] = x[i][j++];
 						}
 
 						offset += pad;
 					}
-
-					offset += padWidth;
 				}
 			}
 
@@ -203,7 +203,7 @@ public class Convolutional implements Layer {
 	}
 
 	public double[][] forward(double[][] x) {
-		input = pad(x, pad);
+		input = pad(x);
 
 		output = new double[x.length][filterAmount * outputHeight * outputWidth];
 
