@@ -358,9 +358,10 @@ public class GRU implements Layer {
 		for (int t = x.length - 1; t >= 0; t--) {
 			final int time = t;
 
-			IntStream.range(0, hiddenSize).parallel().forEach(i -> dh[i] += previousDelta[time][i]);
-
-			IntStream.range(0, hiddenSize).parallel().forEach(i -> dhc[i] = dh[i] * (1 - z[time][i]) * derivative[time][i]);
+			IntStream.range(0, hiddenSize).parallel().forEach(i -> {
+				dh[i] += previousDelta[time][i];
+				dhc[i] = dh[i] * (1 - z[time][i]) * derivative[time][i];
+			});
 
 			IntStream.range(0, hiddenSize).parallel().forEach(i -> {
 				double dot = 0;
@@ -373,11 +374,9 @@ public class GRU implements Layer {
 				dz[i] = dh[i] * (h[time][i] - hc[time][i]) * dzActivation[time][i];
 
 				dh[i] = dh[i] * z[time][i] + r[time][i] * dot;
-			});
 
-			IntStream.range(0, inputSize).parallel().forEach(i -> {
-				for (int j = 0; j < hiddenSize; j++) {
-					dx[time][i] += w[i + inputSize * j] * dhc[j];
+				for (int j = 0; j < inputSize; j++) {
+					dx[time][j] += w[j + inputSize * i] * dhc[i];
 				}
 			});
 
@@ -386,12 +385,10 @@ public class GRU implements Layer {
 					dh[i] += uz[i + hiddenSize * j] * dz[j];
 					dh[i] += ur[i + hiddenSize * j] * dr[j];
 				}
-			});
 
-			IntStream.range(0, inputSize).parallel().forEach(i -> {
-				for (int j = 0; j < hiddenSize; j++) {
-					dx[time][i] += wz[i + inputSize * j] * dz[j];
-					dx[time][i] += wr[i + inputSize * j] * dr[j];
+				for (int j = 0; j < inputSize; j++) {
+					dx[time][j] += wz[j + inputSize * i] * dz[i];
+					dx[time][j] += wr[j + inputSize * i] * dr[i];
 				}
 			});
 
