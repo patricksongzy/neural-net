@@ -1,12 +1,12 @@
 # neural-net
-A neural network implementation in Java. This implementation passes gradient checks, but does not guaranty accuracy. This project has no commit history, because it was copied off of one of my private repositories.
+A neural network implementation in Java. This implementation passes gradient checks, but does not guarantee accuracy.
 ## Project
 This project includes:
 * Convolutional, Feed-Forward, Down-Sampling/Pooling, Dropout and GRU layers.
 * ReLU, Identity/Linear, Sigmoid, Softmax and TanH Activations.
 * Cross-Entropy and Mean-Square-Error costs.
-* He Gaussian initialization.
-* Adam optimizer.
+* [He](https://arxiv.org/abs/1502.01852) Gaussian initialization.
+* [Adam](https://arxiv.org/abs/1412.6980) optimizer.
 
 ## Problems
 * The implementation uses Aparapi, which does not train as fast as custom-made OpenCL kernels, allowing it to remain purely Java.
