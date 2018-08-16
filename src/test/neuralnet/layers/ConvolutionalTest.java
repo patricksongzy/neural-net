@@ -1,4 +1,4 @@
-package test.neuralnet.activations;
+package test.neuralnet.layers;
 
 import main.neuralnet.Model;
 import main.neuralnet.activations.ActivationType;
