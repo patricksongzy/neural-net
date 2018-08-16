@@ -25,6 +25,7 @@ public class FeedForward implements Layer {
 	private Mode mode = Mode.TRAIN;
 
 	private int inputSize, outputSize;
+	private double temperature;
 	private ForwardKernel forwardKernel;
 	private DeltaKernel deltaKernel;
 	private Initializer initializer;
@@ -44,6 +45,7 @@ public class FeedForward implements Layer {
 	FeedForward(DataInputStream dis) throws IOException {
 		inputSize = dis.readInt();
 		outputSize = dis.readInt();
+		temperature = dis.readDouble();
 
 		activation = ActivationType.fromString(dis).create();
 		updaterType = UpdaterType.fromString(dis);
@@ -69,8 +71,10 @@ public class FeedForward implements Layer {
 		deltaKernel = new DeltaKernel(inputSize, outputSize);
 	}
 
-	private FeedForward(int outputSize, Initializer initializer, UpdaterType updaterType, ActivationType activationType) {
+	private FeedForward(int outputSize, double temperature, Initializer initializer, UpdaterType updaterType, ActivationType activationType) {
 		this.outputSize = outputSize;
+
+		this.temperature = temperature;
 
 		this.initializer = initializer;
 		this.updaterType = updaterType;
@@ -127,6 +131,14 @@ public class FeedForward implements Layer {
 		// multiplying against weights
 		forwardKernel.init(weights, biases, input, output);
 		forwardKernel.execute(Range.create2D(x.length, outputSize));
+
+		if (mode == Mode.EVAL && temperature != 1) {
+			IntStream.range(0, x.length).parallel().forEach(b -> {
+				for (int i = 0; i < outputSize; i++) {
+					output[b][i] /= temperature;
+				}
+			});
+		}
 
 		// activating output
 		activation.activation(output);
@@ -224,6 +236,7 @@ public class FeedForward implements Layer {
 	public void export(DataOutputStream dos) throws IOException {
 		dos.writeInt(inputSize);
 		dos.writeInt(outputSize);
+		dos.writeDouble(temperature);
 
 		activation.getType().export(dos);
 		updaterType.export(dos);
@@ -254,11 +267,13 @@ public class FeedForward implements Layer {
 	 */
 	public static class Builder {
 		private int outputSize;
+		private double temperature;
 		private UpdaterType updaterType;
 		private ActivationType activationType;
 		private Initializer initializer;
 
 		public Builder() {
+			temperature = 1;
 			updaterType = UpdaterType.ADAM;
 			activationType = ActivationType.RELU;
 			initializer = new HeInitialization();
@@ -272,6 +287,16 @@ public class FeedForward implements Layer {
 		public Builder outputSize(int outputSize) {
 			this.outputSize = outputSize;
 			return this;
+		}
+
+		/**
+		 * The temperature is used on evaluation. The lower the temperature, the more conservative the network will be with it's
+		 * predictions. DO NOT set (use default value) if using for classification or similar tasks.
+		 *
+		 * @param temperature the temperature
+		 */
+		public void setTemperature(double temperature) {
+			this.temperature = temperature;
 		}
 
 		/**
@@ -308,13 +333,17 @@ public class FeedForward implements Layer {
 		 * @param initializer the initializer
 		 */
 		public Builder initializer(Initializer initializer) {
-			this.initializer = initializer;
+			if (initializer != null)
+				this.initializer = initializer;
+			else
+				throw new IllegalArgumentException();
+
 			return this;
 		}
 
 		public FeedForward build() {
-			if (outputSize > 0)
-				return new FeedForward(outputSize, initializer, updaterType, activationType);
+			if (outputSize > 0 && temperature > 0)
+				return new FeedForward(outputSize, temperature, initializer, updaterType, activationType);
 
 			throw new IllegalArgumentException();
 		}

@@ -10,11 +10,11 @@ import java.io.DataOutputStream;
 import java.io.IOException;
 
 /**
- * Sampling layers downsample inputs. Max pooling does so by taking a max out of a certain area from the input. To back propagation,
+ * Pooling layers downsample inputs. Max pooling does so by taking a max out of a certain area from the input. To back propagation,
  * upsampling is used, where the switches of the max pooling (the selected indices) are remembered, and used to place the deltas at such
  * locations.
  */
-public class Sampling implements Layer {
+public class Pooling implements Layer {
 	private DownsampleKernel downsampleKernel;
 	private UpsampleKernel upsampleKernel;
 
@@ -25,12 +25,12 @@ public class Sampling implements Layer {
 	private byte[][] switches;
 	private double[][] output, upsampled;
 
-	private Sampling(int downsampleSize, int downsampleStride) {
+	private Pooling(int downsampleSize, int downsampleStride) {
 		this.downsampleSize = downsampleSize;
 		this.downsampleStride = downsampleStride;
 	}
 
-	Sampling(DataInputStream dis) throws IOException {
+	Pooling(DataInputStream dis) throws IOException {
 		inputHeight = dis.readInt();
 		inputWidth = dis.readInt();
 		filterAmount = dis.readInt();
@@ -112,7 +112,7 @@ public class Sampling implements Layer {
 	}
 
 	public LayerType getType() {
-		return LayerType.SAMPLING;
+		return LayerType.POOLING;
 	}
 
 	public static class Builder {
@@ -128,9 +128,9 @@ public class Sampling implements Layer {
 			return this;
 		}
 
-		public Sampling build() {
+		public Pooling build() {
 			if (downsampleSize > 0 && downsampleStride >= 0)
-				return new Sampling(downsampleSize, downsampleStride);
+				return new Pooling(downsampleSize, downsampleStride);
 
 			throw new IllegalArgumentException();
 		}

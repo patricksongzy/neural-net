@@ -11,6 +11,7 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.ThreadLocalRandom;
 
 /**
  * Models represent neural network models. They forward and back propagate layers.
@@ -178,11 +179,11 @@ public class Model {
 	 * The batch size dictates the amount of training data the network learns, before updating parameters.
 	 * Targets must be encoded sparsely. This method does not support one-hot encoding, for performance reasons.
 	 *
-	 * @param data a map of the inputs and the <b>sparse-encoded</b> targets
+	 * @param data      a map of the inputs and the <b>sparse-encoded</b> targets
 	 * @param batchSize the batch size
-	 * @param epochs the epochs
-	 * @param interval the interval to export
-	 * @param name the name to export to
+	 * @param epochs    the epochs
+	 * @param interval  the interval to export
+	 * @param name      the name to export to
 	 */
 	public void trainRecurrent(Map<double[][], int[]> data, int batchSize, int epochs, int interval,
 							   String name) {

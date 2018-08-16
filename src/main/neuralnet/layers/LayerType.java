@@ -8,7 +8,7 @@ import java.io.IOException;
  * The LayerType is used for exporting and importing layers.
  */
 public enum LayerType {
-	CONVOLUTIONAL, DROPOUT, FEED_FORWARD, SAMPLING, GRU;
+	CONVOLUTIONAL, DROPOUT, FEED_FORWARD, POOLING, GRU;
 
 	/**
 	 * Imports a layer given an input stream.
@@ -24,8 +24,8 @@ public enum LayerType {
 				return new Dropout(dis);
 			case FEED_FORWARD:
 				return new FeedForward(dis);
-			case SAMPLING:
-				return new Sampling(dis);
+			case POOLING:
+				return new Pooling(dis);
 			case GRU:
 				return new GRU(dis);
 			default:

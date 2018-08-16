@@ -33,7 +33,7 @@ public class SparseCrossEntropy implements Cost {
 		double[][] derivative = activation.derivative(output);
 
 		if (activation.getType() == ActivationType.SOFTMAX) {
-			deltaKernel.init(output, target, derivative, delta);
+			deltaKernel.init(output, target, delta);
 			deltaKernel.execute(Range.create2D(output.length, output[0].length));
 		} else {
 			IntStream.range(0, output.length).parallel().forEach(b -> {
@@ -49,12 +49,11 @@ public class SparseCrossEntropy implements Cost {
 	 * The DeltaKernel calculates the delta of an output layer.
 	 */
 	class DeltaKernel extends Kernel {
-		private double[][] output, target, derivative, delta;
+		private double[][] output, target, delta;
 
-		void init(double[][] output, double[][] target, double[][] derivative, double[][] delta) {
+		void init(double[][] output, double[][] target, double[][] delta) {
 			this.output = output;
 			this.target = target;
-			this.derivative = derivative;
 			this.delta = delta;
 		}
 

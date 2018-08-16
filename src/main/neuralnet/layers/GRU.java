@@ -12,6 +12,7 @@ import main.neuralnet.optimizers.UpdaterType;
 import java.io.DataInputStream;
 import java.io.DataOutputStream;
 import java.io.IOException;
+import java.util.concurrent.ThreadLocalRandom;
 import java.util.stream.IntStream;
 
 public class GRU implements Layer {
@@ -225,6 +226,14 @@ public class GRU implements Layer {
 	}
 
 	public void setMode(Mode mode) {
+		if (mode == Mode.GRADIENT_CHECK) {
+			for (int i = 0; i < state.length; i++) {
+				state[i] = ThreadLocalRandom.current().nextDouble();
+			}
+		} else {
+			state = new double[hiddenSize];
+		}
+
 		this.mode = mode;
 	}
 
