@@ -15,12 +15,12 @@ class Plot extends JPanel {
 	private int iteration, epochs, batch, batchPosition;
 	private double top, xScale, yScale;
 
-	public void init(int epochs, double batchAmount) {
+	void init(int epochs, double batchAmount) {
 		this.epochs = epochs;
 		this.batchAmount = batchAmount;
 	}
 
-	public void update(double x, double y, int iteration, int batch, int batchPosition) {
+	void update(double x, double y, int iteration, int batch, int batchPosition) {
 		xScale = getWidth() / x;
 
 		if (y > top)

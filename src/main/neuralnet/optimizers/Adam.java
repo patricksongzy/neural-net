@@ -32,10 +32,12 @@ public class Adam implements Updater {
 	 *
 	 * @param learningRate the learning rate
 	 */
+	@SuppressWarnings("unused")
 	public static void init(double learningRate) {
 		Adam.learningRate = learningRate;
 	}
 
+	@SuppressWarnings("unused")
 	public static void init(double beta1, double beta2, double epsilon, double learningRate) {
 		Adam.beta1 = beta1;
 		Adam.beta2 = beta2;

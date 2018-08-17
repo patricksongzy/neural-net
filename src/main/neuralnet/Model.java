@@ -35,6 +35,7 @@ public class Model {
 	 *
 	 * @param file the path to the file
 	 */
+	@SuppressWarnings("unused")
 	public Model(String file) {
 		DataInputStream dis = null;
 
@@ -99,6 +100,7 @@ public class Model {
 	 *
 	 * @param mode the mode
 	 */
+	@SuppressWarnings("WeakerAccess")
 	public void setMode(Layer.Mode mode) {
 		for (Layer layer : layers)
 			layer.setMode(mode);
@@ -115,6 +117,7 @@ public class Model {
 	 * @param interval  the interval to export
 	 * @param name      the model name
 	 */
+	@SuppressWarnings("unused")
 	public void train(Map<double[], double[]> data, int batchSize, int epochs, int interval, String name) {
 		Plot plot = new Plot();
 		JFrame frame = new JFrame("Network Cost");
@@ -183,6 +186,7 @@ public class Model {
 	 * @param interval  the interval to export
 	 * @param name      the name to export to
 	 */
+	@SuppressWarnings("unused")
 	public void trainRecurrent(Map<double[][], int[]> data, int batchSize, int epochs, int interval,
 							   String name) {
 		Plot plot = new Plot();

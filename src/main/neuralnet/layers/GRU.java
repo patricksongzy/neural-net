@@ -205,9 +205,9 @@ public class GRU implements Layer {
 		z = new double[x.length][hiddenSize];
 		r = new double[x.length][hiddenSize];
 		h = new double[x.length + 1][hiddenSize];
-		y = new double[x.length][hiddenSize];
+		y = new double[x.length][];
 
-		System.arraycopy(state, 0, h[0], 0, hiddenSize);
+		h[0] = state;
 
 		for (int t = 0; t < x.length; t++) {
 			final int time = t;
@@ -247,10 +247,9 @@ public class GRU implements Layer {
 
 			activation.activation(hc[time]);
 
-			IntStream.range(0, hiddenSize).parallel().forEach(i -> {
-				h[time + 1][i] += z[time][i] * h[time][i] + (1 - z[time][i]) * hc[time][i];
-				y[time][i] = h[time + 1][i];
-			});
+			IntStream.range(0, hiddenSize).parallel().forEach(i -> h[time + 1][i] += z[time][i] * h[time][i] + (1 - z[time][i]) * hc[time][i]);
+
+			y[time] = h[time + 1];
 		}
 
 		if (mode != Mode.GRADIENT_CHECK)
