@@ -1,7 +1,5 @@
 package main.neuralnet.layers;
 
-import com.amd.aparapi.Kernel;
-import com.amd.aparapi.Range;
 import main.neuralnet.activations.Activation;
 import main.neuralnet.activations.ActivationType;
 import main.neuralnet.costs.Cost;
@@ -25,8 +23,6 @@ public class FeedForward implements Layer {
 
 	private int inputSize, outputSize;
 	private double temperature;
-	private ForwardKernel forwardKernel;
-	private DeltaKernel deltaKernel;
 	private Initializer initializer;
 	private UpdaterType updaterType;
 	private Activation activation;
@@ -65,9 +61,6 @@ public class FeedForward implements Layer {
 				weightUpdaters[index] = updaterType.create(dis);
 			}
 		}
-
-		forwardKernel = new ForwardKernel(inputSize);
-		deltaKernel = new DeltaKernel(inputSize, outputSize);
 	}
 
 	private FeedForward(int outputSize, double temperature, Initializer initializer, UpdaterType updaterType, ActivationType activationType) {
@@ -114,9 +107,6 @@ public class FeedForward implements Layer {
 				weightUpdaters[index] = updaterType.create();
 			}
 		}
-
-		forwardKernel = new ForwardKernel(inputSize);
-		deltaKernel = new DeltaKernel(inputSize, outputSize);
 	}
 
 	public double[][][] getParameters() {
@@ -128,8 +118,14 @@ public class FeedForward implements Layer {
 		output = new double[x.length][outputSize];
 
 		// multiplying against weights
-		forwardKernel.init(weights, biases, input, output);
-		forwardKernel.execute(Range.create2D(x.length, outputSize));
+		IntStream.range(0, x.length).parallel().forEach(b -> {
+			for (int i = 0; i < outputSize; i++) {
+				for (int j = 0; j < inputSize; j++)
+					output[b][i] += weights[j + inputSize * i] * input[b][j];
+
+				output[b][i] += biases[i];
+			}
+		});
 
 		if (mode == Mode.EVAL && temperature != 1) {
 			IntStream.range(0, x.length).parallel().forEach(b -> {
@@ -149,7 +145,6 @@ public class FeedForward implements Layer {
 		double[][] previousDelta = cost.derivative(output, target, activation);
 
 		biasGradient = new double[outputSize];
-		double[][] delta = new double[output.length][inputSize];
 
 		for (int i = 0; i < outputSize; i++) {
 			for (double[] d : previousDelta) {
@@ -159,17 +154,12 @@ public class FeedForward implements Layer {
 
 		getGradient(previousDelta);
 
-		// calculating delta
-		deltaKernel.init(previousDelta, weights, delta);
-		deltaKernel.execute(Range.create2D(output.length, inputSize));
-
-		return delta;
+		return getDelta(previousDelta);
 	}
 
 	public double[][] backward(double[][] previousDelta) {
 		output = activation.derivative(output);
 		biasGradient = new double[outputSize];
-		double[][] delta = new double[output.length][inputSize];
 
 		for (int b = 0; b < previousDelta.length; b++) {
 			for (int i = 0; i < outputSize; i++) {
@@ -186,9 +176,20 @@ public class FeedForward implements Layer {
 		// calculating gradient
 		getGradient(previousDelta);
 
-		// calculating dL/dx
-		deltaKernel.init(previousDelta, weights, delta);
-		deltaKernel.execute(Range.create2D(output.length, inputSize));
+		return getDelta(previousDelta);
+	}
+
+	private double[][] getDelta(double[][] previousDelta) {
+		double[][] delta = new double[output.length][inputSize];
+
+		for (int b = 0; b < output.length; b++) {
+			for (int i = 0; i < inputSize; i++) {
+				// dL/dx for the current layer
+				for (int j = 0; j < outputSize; j++) {
+					delta[b][i] += previousDelta[b][j] * weights[i + inputSize * j];
+				}
+			}
+		}
 
 		return delta;
 	}
@@ -344,65 +345,6 @@ public class FeedForward implements Layer {
 				return new FeedForward(outputSize, temperature, initializer, updaterType, activationType);
 
 			throw new IllegalArgumentException();
-		}
-	}
-
-	/**
-	 * Multiplies the inputs against the weights, sums them, then adds a bias term.
-	 */
-	class ForwardKernel extends Kernel {
-		private int inputSize;
-		private double[] weights, biases;
-		private double[][] output, input;
-
-		ForwardKernel(int inputSize) {
-			this.inputSize = inputSize;
-		}
-
-		void init(double[] weights, double[] biases, double[][] input, double[][] output) {
-			this.weights = weights;
-			this.biases = biases;
-			this.input = input;
-			this.output = output;
-		}
-
-		public void run() {
-			int b = getGlobalId(0);
-			int i = getGlobalId(1);
-
-			for (int j = 0; j < inputSize; j++)
-				output[b][i] += weights[j + inputSize * i] * input[b][j];
-
-			output[b][i] += biases[i];
-		}
-	}
-
-	/**
-	 * The DeltaKernel calculates dL/dx
-	 */
-	class DeltaKernel extends Kernel {
-		private int inputSize, outputSize;
-		private double[] weights;
-		private double[][] previousDelta, delta;
-
-		DeltaKernel(int inputSize, int outputSize) {
-			this.inputSize = inputSize;
-			this.outputSize = outputSize;
-		}
-
-		void init(double[][] previousDelta, double[] weights, double[][] delta) {
-			this.previousDelta = previousDelta;
-			this.weights = weights;
-			this.delta = delta;
-		}
-
-		public void run() {
-			int b = getGlobalId(0);
-			int i = getGlobalId(1);
-
-			// dL/dx for the current layer
-			for (int j = 0; j < outputSize; j++)
-				delta[b][i] += previousDelta[b][j] * weights[i + inputSize * j];
 		}
 	}
 }

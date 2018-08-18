@@ -1,7 +1,5 @@
 package main.neuralnet.layers;
 
-import com.amd.aparapi.Kernel;
-import com.amd.aparapi.Range;
 import main.neuralnet.activations.Activation;
 import main.neuralnet.activations.ActivationType;
 import main.neuralnet.costs.Cost;
@@ -26,9 +24,6 @@ public class Convolutional implements Layer {
 	// the filter amount is the output depth
 	// the filter size is the size of the filters
 	private int filterAmount, filterSize;
-	private ConvolutionKernel convolutionKernel;
-	private GradientKernel gradientKernel;
-	private DeltaKernel deltaKernel;
 
 	private UpdaterType updaterType;
 	private Initializer initializer;
@@ -106,10 +101,6 @@ public class Convolutional implements Layer {
 				}
 			}
 		}
-
-		convolutionKernel = new ConvolutionKernel(padWidth, padHeight, depth, stride, outputWidth, outputHeight, filterSize, filterAmount);
-		gradientKernel = new GradientKernel(padWidth, padHeight, depth, stride, outputWidth, outputHeight, filterSize);
-		deltaKernel = new DeltaKernel(padWidth, padHeight, depth, outputWidth, outputHeight, filterSize, filterAmount, stride);
 	}
 
 	public void setDimensions(int... dimensions) {
@@ -152,10 +143,6 @@ public class Convolutional implements Layer {
 				}
 			}
 		});
-
-		convolutionKernel = new ConvolutionKernel(padWidth, padHeight, depth, stride, outputWidth, outputHeight, filterSize, filterAmount);
-		gradientKernel = new GradientKernel(padWidth, padHeight, depth, stride, outputWidth, outputHeight, filterSize);
-		deltaKernel = new DeltaKernel(padWidth, padHeight, depth, outputWidth, outputHeight, filterSize, filterAmount, stride);
 	}
 
 	public void setMode(Mode mode) {
@@ -165,16 +152,16 @@ public class Convolutional implements Layer {
 	/**
 	 * Pads the input.
 	 *
-	 * @param x the input
+	 * @param input the input
 	 * @return the padded input
 	 */
-	public double[][] pad(double[][] x) {
+	public double[][] pad(double[][] input) {
 		if (pad > 0) {
 			// creating an array, with the dimensions of the padded input
-			double[][] out = new double[x.length][depth * padHeight * padWidth];
+			double[][] out = new double[input.length][depth * padHeight * padWidth];
 
 			// padding the array
-			for (int i = 0; i < x.length; i++) {
+			for (int i = 0; i < input.length; i++) {
 				int j = 0;
 
 				for (int d = 0; d < depth; d++) {
@@ -187,7 +174,7 @@ public class Convolutional implements Layer {
 						offset += pad;
 
 						for (int w = 0; w < inputWidth; w++) {
-							out[i][d * padHeight * padWidth + index++ + offset] = x[i][j++];
+							out[i][d * padHeight * padWidth + index++ + offset] = input[i][j++];
 						}
 
 						offset += pad;
@@ -198,7 +185,7 @@ public class Convolutional implements Layer {
 			return out;
 		}
 
-		return x;
+		return input;
 	}
 
 	public double[][] forward(double[][] x) {
@@ -206,9 +193,36 @@ public class Convolutional implements Layer {
 
 		output = new double[x.length][filterAmount * outputHeight * outputWidth];
 
-		// multiplying by filters
-		convolutionKernel.init(filters, biases, input, output);
-		convolutionKernel.execute(Range.create3D(filterAmount * x.length, outputHeight, outputWidth));
+		IntStream.range(0, x.length).parallel().forEach(b -> {
+			for (int f = 0; f < filterAmount; f++) {
+				for (int i = 0; i < outputHeight; i++) {
+					for (int j = 0; j < outputWidth; j++) {
+						// performing strides
+						int h = i * stride;
+						int w = j * stride;
+
+						// convoluted value is the sum of the filters multiplied against the inputs at a certain position
+						double conv = 0;
+
+						for (int k = 0; k < depth; k++) {
+							for (int m = 0; m < filterSize; m++) {
+								for (int n = 0; n < filterSize; n++) {
+									int filterIndex = n + filterSize * (m + filterSize * (k + depth * f));
+									int inputIndex = (w + n) + padWidth * ((h + m) + padHeight * k);
+
+									conv += filters[filterIndex] * input[b][inputIndex];
+								}
+							}
+						}
+
+						// adding biases to shift the activation function
+						int activatedIndex = j + outputWidth * (i + outputHeight * f);
+						output[b][activatedIndex] = (conv + biases[f]);
+					}
+				}
+			}
+		});
+
 		// activation
 		activation.activation(output);
 
@@ -219,25 +233,7 @@ public class Convolutional implements Layer {
 		// back propagation on the Convolutional layers are calculated a layer ahead
 		double[][] previousDelta = cost.derivative(output, target, activation);
 
-		double[][] delta = new double[output.length][depth * padHeight * padWidth];
-		biasGradient = new double[filterAmount];
-
-		gradient = new double[filterAmount * depth * filterSize * filterSize];
-
-		gradientKernel.init(previousDelta, biasGradient, gradient, input);
-		gradientKernel.execute(Range.create2D(filterAmount, output.length));
-
-		// calculating gradient
-		if (mode == Mode.TRAIN) {
-			// updating parameters
-			update(biasGradient, gradient);
-		}
-
-		// calculating the delta
-		deltaKernel.init(delta, previousDelta, filters);
-		deltaKernel.execute(Range.create3D(output.length * depth, padHeight, padWidth));
-
-		return delta;
+		return backward(previousDelta);
 	}
 
 	public double[][] backward(double[][] previousDelta) {
@@ -257,8 +253,32 @@ public class Convolutional implements Layer {
 
 		gradient = new double[filterAmount * depth * filterSize * filterSize];
 
-		gradientKernel.init(previousDelta, biasGradient, gradient, input);
-		gradientKernel.execute(Range.create2D(filterAmount, output.length));
+		IntStream.range(0, output.length).parallel().forEach(b -> {
+			for (int f = 0; f < filterAmount; f++) {
+				for (int i = 0, h = 0; i < outputHeight; i++, h += stride) {
+					for (int j = 0, w = 0; j < outputWidth; j++, w += stride) {
+						int index = j + outputWidth * (i + outputHeight * f);
+
+						// the bias gradient is the delta, since biases are just added to the output
+						double d = previousDelta[b][index];
+						biasGradient[f] += d;
+
+						for (int k = 0; k < depth; k++) {
+							for (int m = 0; m < filterSize; m++) {
+								for (int n = 0; n < filterSize; n++) {
+									int gradientIndex = n + filterSize * (m + filterSize * (k + depth * f));
+									int inputIndex = (w + n) + padWidth * ((h + m) + padHeight * k);
+
+									// the gradient is the delta multiplied against the input, since the filters are multiplied with the
+									// input
+									gradient[gradientIndex] += d * input[b][inputIndex];
+								}
+							}
+						}
+					}
+				}
+			}
+		});
 
 		// calculating gradient
 		if (mode == Mode.TRAIN) {
@@ -267,8 +287,31 @@ public class Convolutional implements Layer {
 		}
 
 		// calculating delta
-		deltaKernel.init(delta, previousDelta, filters);
-		deltaKernel.execute(Range.create3D(output.length * depth, padHeight, padWidth));
+		IntStream.range(0, output.length).parallel().forEach(b -> {
+			for (int k = 0; k < depth; k++) {
+				for (int i = 0; i < padHeight; i++) {
+					for (int j = 0; j < padWidth; j++) {
+						int h = i * stride;
+						int w = j * stride;
+						int deltaIndex = j + padWidth * (i + padHeight * k);
+
+						for (int f = 0; f < filterAmount; f++) {
+							for (int m = 0; m < filterSize; m++) {
+								for (int n = 0; n < filterSize; n++) {
+									if ((w - n) < outputWidth && (h - m) < outputHeight && (w - n) >= 0 && (h - m) >= 0) {
+										int upsampledIndex = (w - n) + outputWidth * ((h - m) + outputHeight * f);
+										int filterIndex = n + filterSize * (m + filterSize * (k + depth * f));
+
+										// same as forward propagation, except the activation derivative is multiplied later
+										delta[b][deltaIndex] += previousDelta[b][upsampledIndex] * filters[filterIndex];
+									}
+								}
+							}
+						}
+					}
+				}
+			}
+		});
 
 		return delta;
 	}
@@ -448,175 +491,6 @@ public class Convolutional implements Layer {
 				return new Convolutional(pad, stride, filterAmount, filterSize, initializer, updaterType, activationType);
 
 			throw new IllegalArgumentException();
-		}
-	}
-
-	/**
-	 * The ConvolutionKernel does convolution with the input and the filters.
-	 */
-	class ConvolutionKernel extends Kernel {
-		private int padWidth, padHeight, depth, stride, outputWidth, outputHeight, filterSize, filterAmount;
-		private double[] filters, biases;
-		private double[][] input, preActivated;
-
-		ConvolutionKernel(int padWidth, int padHeight, int depth, int stride, int outputWidth, int outputHeight, int filterSize,
-						  int filterAmount) {
-			this.padWidth = padWidth;
-			this.padHeight = padHeight;
-			this.depth = depth;
-			this.stride = stride;
-			this.filterSize = filterSize;
-			this.filterAmount = filterAmount;
-			this.outputWidth = outputWidth;
-			this.outputHeight = outputHeight;
-		}
-
-		void init(double[] filters, double[] biases, double[][] input, double[][] preActivated) {
-			this.filters = filters;
-			this.biases = biases;
-			this.input = input;
-			this.preActivated = preActivated;
-		}
-
-		public void run() {
-			int index = getGlobalId(0);
-			int f = index % filterAmount;
-			int b = index / filterAmount;
-			int i = getGlobalId(1);
-			int j = getGlobalId(2);
-
-			// performing strides
-			int h = i * stride;
-			int w = j * stride;
-
-			// convoluted value is the sum of the filters multiplied against the inputs at a certain position
-			double conv = 0;
-
-			for (int k = 0; k < depth; k++) {
-				for (int m = 0; m < filterSize; m++) {
-					for (int n = 0; n < filterSize; n++) {
-						int filterIndex = n + filterSize * (m + filterSize * (k + depth * f));
-						int inputIndex = (w + n) + padWidth * ((h + m) + padHeight * k);
-
-						conv += filters[filterIndex] * input[b][inputIndex];
-					}
-				}
-			}
-
-			// adding biases to shift the activation function
-			int activatedIndex = j + outputWidth * (i + outputHeight * f);
-			preActivated[b][activatedIndex] = (conv + biases[f]);
-		}
-	}
-
-	/**
-	 * The GradientKernel calculates the gradients to update parameters on.
-	 */
-	class GradientKernel extends Kernel {
-		private int padWidth, padHeight, depth, stride, outputWidth, outputHeight, filterSize;
-		private double[] gradient, biasGradient;
-
-		// the previous delta is really the delta of the current layer, calculated from the previous layer in back propagation
-		private double[][] previousDelta, input;
-
-		GradientKernel(int padWidth, int padHeight, int depth, int stride, int outputWidth, int outputHeight, int filterSize) {
-			this.padWidth = padWidth;
-			this.padHeight = padHeight;
-			this.depth = depth;
-			this.stride = stride;
-			this.outputWidth = outputWidth;
-			this.outputHeight = outputHeight;
-			this.filterSize = filterSize;
-		}
-
-		void init(double[][] previousDelta, double[] biasGradient, double[] gradient, double[][] input) {
-			this.previousDelta = previousDelta;
-			this.biasGradient = biasGradient;
-			this.gradient = gradient;
-			this.input = input;
-		}
-
-		public void run() {
-			int f = getGlobalId(0);
-			int b = getGlobalId(1);
-
-			for (int i = 0, h = 0; i < outputHeight; i++, h += stride) {
-				for (int j = 0, w = 0; j < outputWidth; j++, w += stride) {
-					int index = j + outputWidth * (i + outputHeight * f);
-
-					// the bias gradient is the delta, since biases are just added to the output
-					double d = previousDelta[b][index];
-					biasGradient[f] += d;
-
-					for (int k = 0; k < depth; k++) {
-						for (int m = 0; m < filterSize; m++) {
-							for (int n = 0; n < filterSize; n++) {
-								int gradientIndex = n + filterSize * (m + filterSize * (k + depth * f));
-								int inputIndex = (w + n) + padWidth * ((h + m) + padHeight * k);
-
-								// the gradient is the delta multiplied against the input, since the filters are multiplied with the input
-								gradient[gradientIndex] += d * input[b][inputIndex];
-							}
-						}
-					}
-				}
-			}
-		}
-	}
-
-	/**
-	 * The DeltaKernel calculates the delta of the next layer in back propagation, given the current delta, calculated from the previous
-	 * layer.
-	 */
-	class DeltaKernel extends Kernel {
-		private int padWidth, padHeight, depth, outputWidth, outputHeight, filterSize, filterAmount, stride;
-		private double[] filters;
-		private double[][] delta, previousDelta;
-
-		DeltaKernel(int padWidth, int padHeight, int depth, int outputWidth, int outputHeight, int filterSize, int filterAmount,
-					int stride) {
-			this.padWidth = padWidth;
-			this.padHeight = padHeight;
-			this.depth = depth;
-			this.outputWidth = outputWidth;
-			this.outputHeight = outputHeight;
-			this.filterSize = filterSize;
-			this.filterAmount = filterAmount;
-			this.stride = stride;
-		}
-
-		void init(double[][] delta, double[][] previousDelta, double[] filters) {
-			this.delta = delta;
-			this.previousDelta = previousDelta;
-			this.filters = filters;
-		}
-
-		public void run() {
-			int index = getGlobalId(0);
-			int b = index / depth;
-			int k = index % depth;
-
-			int i = getGlobalId(1);
-			int j = getGlobalId(2);
-
-			int h = i * stride;
-			int w = j * stride;
-
-			int deltaIndex = j + padWidth * (i + padHeight * k);
-
-			for (int f = 0; f < filterAmount; f++) {
-				for (int m = 0; m < filterSize; m++) {
-					for (int n = 0; n < filterSize; n++) {
-						if ((w - n) < outputWidth && (h - m) < outputHeight && (w - n) >= 0 && (h - m) >= 0) {
-							int upsampledIndex = (w - n) + outputWidth * ((h - m) + outputHeight * f);
-							int filterIndex = n + filterSize * (m + filterSize * (k + depth * f));
-
-							// same as forward propagation, except the activation derivative is multiplied later
-							delta[b][deltaIndex] += previousDelta[b][upsampledIndex] * filters[filterIndex];
-						}
-					}
-				}
-			}
 		}
 	}
 }

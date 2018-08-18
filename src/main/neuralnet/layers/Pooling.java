@@ -1,13 +1,12 @@
 package main.neuralnet.layers;
 
-import com.amd.aparapi.Kernel;
-import com.amd.aparapi.Range;
 import main.neuralnet.activations.Identity;
 import main.neuralnet.costs.Cost;
 
 import java.io.DataInputStream;
 import java.io.DataOutputStream;
 import java.io.IOException;
+import java.util.stream.IntStream;
 
 /**
  * Pooling layers downsample inputs. Max pooling does so by taking a max out of a certain area from the input. To back propagation,
@@ -15,9 +14,6 @@ import java.io.IOException;
  * locations.
  */
 public class Pooling implements Layer {
-	private DownsampleKernel downsampleKernel;
-	private UpsampleKernel upsampleKernel;
-
 	private int inputHeight, inputWidth, filterAmount;
 	private int downsampleHeight, downsampleWidth;
 	private int downsampleSize, downsampleStride;
@@ -38,9 +34,6 @@ public class Pooling implements Layer {
 		downsampleWidth = dis.readInt();
 		downsampleSize = dis.readInt();
 		downsampleStride = dis.readInt();
-
-		downsampleKernel = new DownsampleKernel(downsampleStride, downsampleSize, inputWidth, inputHeight, downsampleWidth, downsampleHeight);
-		upsampleKernel = new UpsampleKernel(downsampleStride, downsampleWidth, downsampleHeight, downsampleSize, inputWidth, inputHeight);
 	}
 
 	public void setMode(Mode mode) {
@@ -59,17 +52,42 @@ public class Pooling implements Layer {
 
 		this.downsampleWidth = (inputWidth - downsampleSize) / downsampleStride + 1;
 		this.downsampleHeight = (inputHeight - downsampleSize) / downsampleStride + 1;
-
-		downsampleKernel = new DownsampleKernel(downsampleStride, downsampleSize, inputWidth, inputHeight, downsampleWidth, downsampleHeight);
-		upsampleKernel = new UpsampleKernel(downsampleStride, downsampleWidth, downsampleHeight, downsampleSize, inputWidth, inputHeight);
 	}
 
-	public double[][] forward(double[][] x) {
-		switches = new byte[x.length][filterAmount * inputHeight * inputWidth];
-		output = new double[x.length][filterAmount * downsampleHeight * downsampleWidth];
+	public double[][] forward(double[][] input) {
+		switches = new byte[input.length][filterAmount * inputHeight * inputWidth];
+		output = new double[input.length][filterAmount * downsampleHeight * downsampleWidth];
 
-		downsampleKernel.init(x, output, switches);
-		downsampleKernel.execute(Range.create3D(filterAmount, downsampleHeight, downsampleWidth), x.length);
+		IntStream.range(0, input.length).parallel().forEach(b -> {
+			for (int f = 0; f < filterAmount; f++) {
+				for (int i = 0; i < downsampleHeight; i++) {
+					for (int j = 0; j < downsampleWidth; j++) {
+						int h = i * downsampleStride;
+						int w = j * downsampleStride;
+
+						int index = 0;
+						double max = Double.NEGATIVE_INFINITY;
+
+						for (int m = 0; m < downsampleSize; m++) {
+							for (int n = 0; n < downsampleSize; n++) {
+								int outputIndex = (w + n) + inputWidth * ((h + m) + inputHeight * f);
+								double value = input[b][outputIndex];
+
+								// finding the max value
+								if (value > max) {
+									max = value;
+									index = outputIndex;
+								}
+							}
+						}
+
+						int downsampleIndex = j + downsampleWidth * (i + downsampleHeight * f);
+						switches[b][index] = 1;
+						output[b][downsampleIndex] = max;
+					}
+				}
+			}
+		});
 
 		return output;
 	}
@@ -83,8 +101,29 @@ public class Pooling implements Layer {
 	public double[][] backward(double[][] previousDelta) {
 		double[][] upsampled = new double[output.length][filterAmount * inputHeight * inputWidth];
 
-		upsampleKernel.init(switches, upsampled, previousDelta);
-		upsampleKernel.execute(Range.create3D(filterAmount, downsampleHeight, downsampleWidth), output.length);
+		IntStream.range(0, output.length).parallel().forEach(b -> {
+			for (int f = 0; f < filterAmount; f++) {
+				for (int i = 0; i < downsampleHeight; i++) {
+					for (int j = 0; j < downsampleWidth; j++) {
+						int h = i * downsampleStride;
+						int w = j * downsampleStride;
+						int downsampleIndex = j + downsampleWidth * (i + downsampleHeight * f);
+
+						for (int m = 0; m < downsampleSize; m++) {
+							for (int n = 0; n < downsampleSize; n++) {
+								int upsampledIndex = (w + n) + inputWidth * ((h + m) + inputHeight * f);
+
+								// changing the dimensions of the delta, and filling the areas that had the max values with the delta
+								// values
+								if (switches[b][upsampledIndex] == 1) {
+									upsampled[b][upsampledIndex] = previousDelta[b][downsampleIndex];
+								}
+							}
+						}
+					}
+				}
+			}
+		});
 
 		return upsampled;
 	}
@@ -130,103 +169,6 @@ public class Pooling implements Layer {
 				return new Pooling(downsampleSize, downsampleStride);
 
 			throw new IllegalArgumentException();
-		}
-	}
-
-	class DownsampleKernel extends Kernel {
-		private int downsampleStride, downsampleSize, inputWidth, inputHeight, downsampleWidth, downsampleHeight;
-		private byte[][] switches;
-		private double[][] input, downsampled;
-
-		DownsampleKernel(int downsampleStride, int downsampleSize, int inputWidth, int inputHeight, int downsampleWidth, int downsampleHeight) {
-			this.downsampleStride = downsampleStride;
-			this.downsampleSize = downsampleSize;
-			this.inputWidth = inputWidth;
-			this.inputHeight = inputHeight;
-			this.downsampleWidth = downsampleWidth;
-			this.downsampleHeight = downsampleHeight;
-		}
-
-		void init(double[][] input, double[][] downsampled, byte[][] switches) {
-			this.input = input;
-			this.downsampled = downsampled;
-			this.switches = switches;
-		}
-
-		public void run() {
-			int b = getPassId();
-
-			int f = getGlobalId(0);
-			int i = getGlobalId(1);
-			int j = getGlobalId(2);
-
-			int h = i * downsampleStride;
-			int w = j * downsampleStride;
-
-			int index = 0;
-			double max = Double.NEGATIVE_INFINITY;
-
-			for (int m = 0; m < downsampleSize; m++) {
-				for (int n = 0; n < downsampleSize; n++) {
-					int outputIndex = (w + n) + inputWidth * ((h + m) + inputHeight * f);
-					double value = input[b][outputIndex];
-
-					// finding the max value
-					if (value > max) {
-						max = value;
-						index = outputIndex;
-					}
-				}
-			}
-
-			int downsampleIndex = j + downsampleWidth * (i + downsampleHeight * f);
-			switches[b][index] = 1;
-			downsampled[b][downsampleIndex] = max;
-		}
-	}
-
-	class UpsampleKernel extends Kernel {
-		private int downsampleStride, downsampleHeight, downsampleWidth, downsampleSize, inputHeight, inputWidth;
-		private byte[][] switches;
-		private double[][] upsampled, delta;
-
-		UpsampleKernel(int downsampleStride, int downsampleWidth, int downsampleHeight, int downsampleSize, int inputWidth, int inputHeight) {
-			this.downsampleStride = downsampleStride;
-			this.downsampleHeight = downsampleHeight;
-			this.downsampleWidth = downsampleWidth;
-			this.downsampleSize = downsampleSize;
-			this.inputHeight = inputHeight;
-			this.inputWidth = inputWidth;
-		}
-
-		void init(byte[][] switches, double[][] upsampled, double[][] delta) {
-			this.switches = switches;
-			this.upsampled = upsampled;
-			this.delta = delta;
-		}
-
-		public void run() {
-			int b = getPassId();
-
-			int f = getGlobalId(0);
-			int i = getGlobalId(1);
-			int j = getGlobalId(2);
-
-			int h = i * downsampleStride;
-			int w = j * downsampleStride;
-
-			int downsampleIndex = j + downsampleWidth * (i + downsampleHeight * f);
-
-			for (int m = 0; m < downsampleSize; m++) {
-				for (int n = 0; n < downsampleSize; n++) {
-					int upsampledIndex = (w + n) + inputWidth * ((h + m) + inputHeight * f);
-
-					// changing the dimensions of the delta, and filling the areas that had the max values with the delta values
-					if (switches[b][upsampledIndex] == 1) {
-						upsampled[b][upsampledIndex] = delta[b][downsampleIndex];
-					}
-				}
-			}
 		}
 	}
 }
