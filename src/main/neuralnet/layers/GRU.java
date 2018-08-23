@@ -1,5 +1,6 @@
 package main.neuralnet.layers;
 
+import main.GPU;
 import main.neuralnet.activations.Activation;
 import main.neuralnet.activations.ActivationType;
 import main.neuralnet.activations.Identity;
@@ -8,6 +9,7 @@ import main.neuralnet.initializers.HeInitialization;
 import main.neuralnet.initializers.Initializer;
 import main.neuralnet.optimizers.Updater;
 import main.neuralnet.optimizers.UpdaterType;
+import org.jocl.blast.CLBlastTranspose;
 
 import java.io.DataInputStream;
 import java.io.DataOutputStream;
@@ -24,7 +26,7 @@ public class GRU implements Layer {
 	private float[] bz, br, b;
 	private float[] dBz, dBr, dB;
 	private float[] state;
-	private float[][] x, z, r, hc, h, y;
+	private float[][] x, z, r, hc, h, rh, y;
 
 	private int inputSize, hiddenSize;
 
@@ -191,6 +193,7 @@ public class GRU implements Layer {
 		z = new float[x.length][hiddenSize];
 		r = new float[x.length][hiddenSize];
 		h = new float[x.length + 1][hiddenSize];
+		rh = new float[x.length][hiddenSize];
 		y = new float[x.length][];
 
 		h[0] = state;
@@ -198,38 +201,25 @@ public class GRU implements Layer {
 		for (int t = 0; t < x.length; t++) {
 			final int time = t;
 
-			IntStream.range(0, hiddenSize).parallel().forEach(i -> {
-				for (int j = 0; j < inputSize; j++) {
-					z[time][i] += wz[j + inputSize * i] * x[time][j];
-					r[time][i] += wr[j + inputSize * i] * x[time][j];
-				}
-
-				for (int j = 0; j < hiddenSize; j++) {
-					z[time][i] += uz[j + hiddenSize * i] * h[time][j];
-					r[time][i] += ur[j + hiddenSize * i] * h[time][j];
-				}
-
-				z[time][i] += bz[i];
-				r[time][i] += br[i];
-			});
+			z[time] = GPU.sgemm(CLBlastTranspose.CLBlastTransposeNo, CLBlastTranspose.CLBlastTransposeYes, 1,
+				hiddenSize, inputSize, x[time], inputSize, wz, inputSize, bz, hiddenSize);
+			r[time] = GPU.sgemm(CLBlastTranspose.CLBlastTransposeNo, CLBlastTranspose.CLBlastTransposeYes, 1,
+				hiddenSize, inputSize, x[time], inputSize, wr, inputSize, br, hiddenSize);
+			z[time] = GPU.sgemm(CLBlastTranspose.CLBlastTransposeNo, CLBlastTranspose.CLBlastTransposeYes, 1,
+				hiddenSize, hiddenSize, h[time], hiddenSize, uz, hiddenSize, z[time], hiddenSize);
+			r[time] = GPU.sgemm(CLBlastTranspose.CLBlastTransposeNo, CLBlastTranspose.CLBlastTransposeYes, 1,
+				hiddenSize, hiddenSize, h[time], hiddenSize, ur, hiddenSize, r[time], hiddenSize);
 
 			hiddenActivation.activation(z[time]);
 			hiddenActivation.activation(r[time]);
 
-			float[] product = new float[hiddenSize];
-			IntStream.range(0, hiddenSize).parallel().forEach(i -> product[i] += r[time][i] * h[time][i]);
+			rh[time] = new float[hiddenSize];
+			IntStream.range(0, hiddenSize).parallel().forEach(i -> rh[time][i] += r[time][i] * h[time][i]);
 
-			IntStream.range(0, hiddenSize).parallel().forEach(i -> {
-				for (int j = 0; j < inputSize; j++) {
-					hc[time][i] += w[j + inputSize * i] * x[time][j];
-				}
-
-				for (int j = 0; j < hiddenSize; j++) {
-					hc[time][i] += u[j + hiddenSize * i] * product[j];
-				}
-
-				hc[time][i] += b[i];
-			});
+			hc[time] = GPU.sgemm(CLBlastTranspose.CLBlastTransposeNo, CLBlastTranspose.CLBlastTransposeYes, 1,
+				hiddenSize, inputSize, x[time], inputSize, w, inputSize, b, hiddenSize);
+			hc[time] = GPU.sgemm(CLBlastTranspose.CLBlastTransposeNo, CLBlastTranspose.CLBlastTransposeYes, 1,
+				hiddenSize, hiddenSize, rh[time], hiddenSize, u, hiddenSize, hc[time], hiddenSize);
 
 			activation.activation(hc[time]);
 
@@ -245,18 +235,6 @@ public class GRU implements Layer {
 	}
 
 	public float[][] backward(Cost cost, float[][] target) {
-		dWz = new float[hiddenSize * inputSize];
-		dWr = new float[hiddenSize * inputSize];
-		dW = new float[hiddenSize * inputSize];
-
-		dUz = new float[hiddenSize * hiddenSize];
-		dUr = new float[hiddenSize * hiddenSize];
-		dU = new float[hiddenSize * hiddenSize];
-
-		dBz = new float[hiddenSize];
-		dBr = new float[hiddenSize];
-		dB = new float[hiddenSize];
-
 		float[][] dx = new float[x.length][inputSize];
 		float[][] dy = cost.derivative(y, target, new Identity());
 
@@ -266,6 +244,14 @@ public class GRU implements Layer {
 	}
 
 	public float[][] backward(float[][] previousDelta) {
+		float[][] dx = new float[x.length][inputSize];
+
+		backward(previousDelta, dx);
+
+		return dx;
+	}
+
+	private void backward(float[][] previousDelta, float[][] dx) {
 		dWz = new float[hiddenSize * inputSize];
 		dWr = new float[hiddenSize * inputSize];
 		dW = new float[hiddenSize * inputSize];
@@ -278,14 +264,6 @@ public class GRU implements Layer {
 		dBr = new float[hiddenSize];
 		dB = new float[hiddenSize];
 
-		float[][] dx = new float[x.length][inputSize];
-
-		backward(previousDelta, dx);
-
-		return dx;
-	}
-
-	private void backward(float[][] previousDelta, float[][] dx) {
 		// these variable represent before-activation derivatives
 		float[] dh = new float[hiddenSize];
 		float[] dr = new float[hiddenSize];
@@ -297,61 +275,46 @@ public class GRU implements Layer {
 		float[][] dzActivation = hiddenActivation.derivative(z);
 		float[][] drActivation = hiddenActivation.derivative(r);
 
+		// TODO: Stack input and state for more parallel execution
 		for (int t = x.length - 1; t >= 0; t--) {
-			final int time = t;
+			for (int i = 0; i < hiddenSize; i++) {
+				dh[i] += previousDelta[t][i];
+				dhc[i] = dh[i] * (1 - z[t][i]) * derivative[t][i];
+			}
+
+			// dhc/dht-1
+			float[] dhNext = GPU.sgemm(CLBlastTranspose.CLBlastTransposeNo, CLBlastTranspose.CLBlastTransposeNo, 1, hiddenSize,
+				hiddenSize, dhc, hiddenSize, u, hiddenSize, new float[hiddenSize], hiddenSize);
+
+			dx[t] = GPU.sgemm(CLBlastTranspose.CLBlastTransposeNo, CLBlastTranspose.CLBlastTransposeNo, 1,
+				inputSize, hiddenSize, dhc, hiddenSize, w, inputSize, new float[inputSize], inputSize);
+
+			for (int i = 0; i < hiddenSize; i++) {
+				dr[i] = h[t][i] * dhNext[i] * drActivation[t][i];
+				dz[i] = dh[i] * (h[t][i] - hc[t][i]) * dzActivation[t][i];
+
+				dh[i] = dh[i] * z[t][i] + r[t][i] * dhNext[i];
+			}
+
+			dx[t] = GPU.sgemm(CLBlastTranspose.CLBlastTransposeNo, CLBlastTranspose.CLBlastTransposeNo, 1,
+				inputSize, hiddenSize, dz, hiddenSize, wz, inputSize, dx[t], inputSize);
+			dx[t] = GPU.sgemm(CLBlastTranspose.CLBlastTransposeNo, CLBlastTranspose.CLBlastTransposeNo, 1,
+				inputSize, hiddenSize, dr, hiddenSize, wr, inputSize, dx[t], inputSize);
+
+			dh = GPU.sgemm(CLBlastTranspose.CLBlastTransposeNo, CLBlastTranspose.CLBlastTransposeNo, 1,
+				hiddenSize, hiddenSize, dz, hiddenSize, uz, hiddenSize, dh, hiddenSize);
+			dh = GPU.sgemm(CLBlastTranspose.CLBlastTransposeNo, CLBlastTranspose.CLBlastTransposeNo, 1,
+				hiddenSize, hiddenSize, dr, hiddenSize, ur, hiddenSize, dh, hiddenSize);
+
+			dWr = GPU.sger(hiddenSize, inputSize, dr, x[t], dWr, inputSize);
+			dWz = GPU.sger(hiddenSize, inputSize, dz, x[t], dWz, inputSize);
+			dW = GPU.sger(hiddenSize, inputSize, dhc, x[t], dW, inputSize);
+
+			dUr = GPU.sger(hiddenSize, hiddenSize, dr, h[t], dUr, hiddenSize);
+			dUz = GPU.sger(hiddenSize, hiddenSize, dz, h[t], dUz, hiddenSize);
+			dU = GPU.sger(hiddenSize, hiddenSize, dhc, rh[t], dU, hiddenSize);
 
 			IntStream.range(0, hiddenSize).parallel().forEach(i -> {
-				dh[i] += previousDelta[time][i];
-				dhc[i] = dh[i] * (1 - z[time][i]) * derivative[time][i];
-			});
-
-			IntStream.range(0, hiddenSize).parallel().forEach(i -> {
-				// dhc/dht-1
-				float dhNext = 0;
-
-				for (int j = 0; j < hiddenSize; j++) {
-					dhNext += u[i + hiddenSize * j] * dhc[j];
-				}
-
-				dr[i] = h[time][i] * dhNext * drActivation[time][i];
-				dz[i] = dh[i] * (h[time][i] - hc[time][i]) * dzActivation[time][i];
-
-				dh[i] = dh[i] * z[time][i] + r[time][i] * dhNext;
-
-				for (int j = 0; j < inputSize; j++) {
-					dx[time][j] += w[j + inputSize * i] * dhc[i];
-				}
-			});
-
-			IntStream.range(0, hiddenSize).parallel().forEach(i -> {
-				for (int j = 0; j < inputSize; j++) {
-					dx[time][j] += wz[j + inputSize * i] * dz[i];
-					dx[time][j] += wr[j + inputSize * i] * dr[i];
-				}
-
-				for (int j = 0; j < hiddenSize; j++) {
-					dh[i] += uz[i + hiddenSize * j] * dz[j];
-					dh[i] += ur[i + hiddenSize * j] * dr[j];
-				}
-			});
-
-			float[] product = new float[hiddenSize];
-
-			IntStream.range(0, hiddenSize).parallel().forEach(i -> product[i] = r[time][i] * h[time][i]);
-
-			IntStream.range(0, hiddenSize).parallel().forEach(i -> {
-				for (int j = 0; j < inputSize; j++) {
-					dWr[j + inputSize * i] += dr[i] * x[time][j];
-					dWz[j + inputSize * i] += dz[i] * x[time][j];
-					dW[j + inputSize * i] += dhc[i] * x[time][j];
-				}
-
-				for (int j = 0; j < hiddenSize; j++) {
-					dUr[j + hiddenSize * i] += dr[i] * h[time][j];
-					dUz[j + hiddenSize * i] += dz[i] * h[time][j];
-					dU[j + hiddenSize * i] += dhc[i] * product[j];
-				}
-
 				dBr[i] += dr[i];
 				dBz[i] += dz[i];
 				dB[i] += dhc[i];

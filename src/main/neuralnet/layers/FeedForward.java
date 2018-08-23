@@ -180,7 +180,7 @@ public class FeedForward implements Layer {
 
 		for (int b = 0; b < output.length; b++) {
 			delta[b] = GPU.sgemm(CLBlastTranspose.CLBlastTransposeNo, CLBlastTranspose.CLBlastTransposeNo, 1,
-				inputSize, outputSize, previousDelta[b], outputSize, weights, inputSize, new float[outputSize], outputSize);
+				inputSize, outputSize, previousDelta[b], outputSize, weights, inputSize, new float[inputSize], inputSize);
 		}
 
 		return delta;
