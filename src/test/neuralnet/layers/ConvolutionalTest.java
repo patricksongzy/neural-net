@@ -19,7 +19,7 @@ class ConvolutionalTest {
 		Convolutional convolutional = new Convolutional.Builder().filterAmount(1).activationType(ActivationType.RELU).filterSize(3)
 				.initializer(new HeInitialization()).pad(2).stride(2).updaterType(UpdaterType.ADAM).build();
 		convolutional.setDimensions(2, 2, 2);
-		double[][] input = new double[][] {{
+		float[][] input = new float[][]{{
 				1, 2,
 				2, 1,
 
@@ -27,7 +27,7 @@ class ConvolutionalTest {
 				1, 3}
 		};
 
-		double[] target = new double[]{
+		float[] target = new float[]{
 				0, 0, 0, 0, 0, 0,
 				0, 0, 0, 0, 0, 0,
 				0, 0, 1, 2, 0, 0,
@@ -50,17 +50,17 @@ class ConvolutionalTest {
 		Convolutional convolutional = new Convolutional.Builder().filterAmount(1).activationType(ActivationType.RELU).filterSize(3)
 				.initializer(new HeInitialization()).pad(2).stride(2).updaterType(UpdaterType.ADAM).build();
 		convolutional.setDimensions(3, 3, 1);
-		double[][] input = new double[][] {
+		float[][] input = new float[][]{
 				{2, 1, 0,
 				2, 0, 1,
 				1, 2, 0,}};
 
-		double[] updated = new double[] {2, 1, 3, 1, 2, 1, 3, 1, 1};
+		float[] updated = new float[]{2, 1, 3, 1, 2, 1, 3, 1, 1};
 		for (int i = 0; i < convolutional.getParameters()[0][0].length; i++) {
 			convolutional.getParameters()[0][0][i] = updated[i];
 		}
 
-		assertArrayEquals(new double[] {2, 7, 0, 9, 13, 1, 3, 4, 0}, convolutional.forward(input)[0]);
+		assertArrayEquals(new float[]{2, 7, 0, 9, 13, 1, 3, 4, 0}, convolutional.forward(input)[0]);
 	}
 
 	@Test
@@ -70,14 +70,14 @@ class ConvolutionalTest {
 				.cost(CostType.MEAN_SQUARE_ERROR).inputDimensions(32, 36, 1).build();
 
 		// just a regular test
-		double[][] input = new double[1][32 * 32 * 3];
-		double[][] target = new double[1][17 * 19 * 16];
+		float[][] input = new float[1][32 * 32 * 3];
+		float[][] target = new float[1][17 * 19 * 16];
 
 		for (int i = 0; i < input.length; i++) {
 			for (int j = 0; j < input[0].length; j++)
-				input[i][j] = ThreadLocalRandom.current().nextDouble();
+				input[i][j] = ThreadLocalRandom.current().nextFloat();
 			for (int j = 0; j < target[0].length; j++)
-				target[i][j] = ThreadLocalRandom.current().nextDouble();
+				target[i][j] = ThreadLocalRandom.current().nextFloat();
 		}
 
 		assertTrue(model.gradientCheck(input, target));

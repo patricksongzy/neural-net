@@ -16,19 +16,19 @@ public interface Activation {
 	 *
 	 * @param x the pre-activated input
 	 */
-	void activation(double[] x);
+	void activation(float[] x);
 
 	/**
 	 * This method simulates the activation of neurons. It directly modifies the input.
 	 *
 	 * @param x the pre-activated input
 	 */
-	void activation(double[][] x);
+	void activation(float[][] x);
 
 	/**
 	 * This method calculates the derivative of the activation.
 	 *
 	 * @param x the activated output
 	 */
-	double[][] derivative(double[][] x);
+	float[][] derivative(float[][] x);
 }

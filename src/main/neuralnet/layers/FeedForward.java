@@ -1,5 +1,6 @@
 package main.neuralnet.layers;
 
+import main.GPU;
 import main.neuralnet.activations.Activation;
 import main.neuralnet.activations.ActivationType;
 import main.neuralnet.costs.Cost;
@@ -7,6 +8,7 @@ import main.neuralnet.initializers.HeInitialization;
 import main.neuralnet.initializers.Initializer;
 import main.neuralnet.optimizers.Updater;
 import main.neuralnet.optimizers.UpdaterType;
+import org.jocl.blast.CLBlastTranspose;
 
 import java.io.DataInputStream;
 import java.io.DataOutputStream;
@@ -22,15 +24,15 @@ public class FeedForward implements Layer {
 	private Mode mode = Mode.TRAIN;
 
 	private int inputSize, outputSize;
-	private double temperature;
+	private float temperature;
 	private Initializer initializer;
 	private UpdaterType updaterType;
 	private Activation activation;
 	private Updater[] weightUpdaters;
 	private Updater[] biasUpdaters;
-	private double[] weights, biases;
-	private double[] gradient, biasGradient;
-	private double[][] input, output;
+	private float[] weights, biases;
+	private float[] gradient, biasGradient;
+	private float[][] input, output;
 
 	/**
 	 * Initializes a FeedForward layer neural network from a file.
@@ -40,30 +42,31 @@ public class FeedForward implements Layer {
 	FeedForward(DataInputStream dis) throws IOException {
 		inputSize = dis.readInt();
 		outputSize = dis.readInt();
-		temperature = dis.readDouble();
+		temperature = dis.readFloat();
 
 		activation = ActivationType.fromString(dis).create();
 		updaterType = UpdaterType.fromString(dis);
 
-		biases = new double[outputSize];
+		biases = new float[outputSize];
 		biasUpdaters = new Updater[outputSize];
-		weights = new double[outputSize * inputSize];
+		weights = new float[outputSize * inputSize];
 		weightUpdaters = new Updater[outputSize * inputSize];
 
 		for (int i = 0; i < outputSize; i++) {
-			biases[i] = dis.readDouble();
+			biases[i] = dis.readFloat();
 			biasUpdaters[i] = updaterType.create(dis);
 
 			for (int j = 0; j < inputSize; j++) {
 				int index = j + inputSize * i;
 
-				weights[index] = dis.readDouble();
+				weights[index] = dis.readFloat();
 				weightUpdaters[index] = updaterType.create(dis);
 			}
 		}
 	}
 
-	private FeedForward(int outputSize, double temperature, Initializer initializer, UpdaterType updaterType, ActivationType activationType) {
+	private FeedForward(int outputSize, float temperature, Initializer initializer, UpdaterType updaterType,
+						ActivationType activationType) {
 		this.outputSize = outputSize;
 
 		this.temperature = temperature;
@@ -92,9 +95,9 @@ public class FeedForward implements Layer {
 		if (inputSize <= 0)
 			throw new IllegalArgumentException();
 
-		biases = new double[outputSize];
+		biases = new float[outputSize];
 		biasUpdaters = new Updater[outputSize];
-		weights = new double[outputSize * inputSize];
+		weights = new float[outputSize * inputSize];
 		weightUpdaters = new Updater[outputSize * inputSize];
 
 		for (int i = 0; i < outputSize; i++) {
@@ -109,23 +112,18 @@ public class FeedForward implements Layer {
 		}
 	}
 
-	public double[][][] getParameters() {
-		return new double[][][] {{weights, gradient}, {biases, biasGradient}};
+	public float[][][] getParameters() {
+		return new float[][][]{{weights, gradient}, {biases, biasGradient}};
 	}
 
-	public double[][] forward(double[][] x) {
+	public float[][] forward(float[][] x) {
 		input = x;
-		output = new double[x.length][outputSize];
+		output = new float[x.length][outputSize];
 
-		// multiplying against weights
-		IntStream.range(0, x.length).parallel().forEach(b -> {
-			for (int i = 0; i < outputSize; i++) {
-				for (int j = 0; j < inputSize; j++)
-					output[b][i] += weights[j + inputSize * i] * input[b][j];
-
-				output[b][i] += biases[i];
-			}
-		});
+		for (int b = 0; b < x.length; b++) {
+			output[b] = GPU.sgemm(CLBlastTranspose.CLBlastTransposeNo, CLBlastTranspose.CLBlastTransposeYes, 1,
+				outputSize, inputSize, input[b], inputSize, weights, inputSize, biases, outputSize);
+		}
 
 		if (mode == Mode.EVAL && temperature != 1) {
 			IntStream.range(0, x.length).parallel().forEach(b -> {
@@ -141,13 +139,13 @@ public class FeedForward implements Layer {
 		return output;
 	}
 
-	public double[][] backward(Cost cost, double[][] target) {
-		double[][] previousDelta = cost.derivative(output, target, activation);
+	public float[][] backward(Cost cost, float[][] target) {
+		float[][] previousDelta = cost.derivative(output, target, activation);
 
-		biasGradient = new double[outputSize];
+		biasGradient = new float[outputSize];
 
 		for (int i = 0; i < outputSize; i++) {
-			for (double[] d : previousDelta) {
+			for (float[] d : previousDelta) {
 				biasGradient[i] += d[i];
 			}
 		}
@@ -157,18 +155,16 @@ public class FeedForward implements Layer {
 		return getDelta(previousDelta);
 	}
 
-	public double[][] backward(double[][] previousDelta) {
+	public float[][] backward(float[][] previousDelta) {
 		output = activation.derivative(output);
-		biasGradient = new double[outputSize];
-
-		for (int b = 0; b < previousDelta.length; b++) {
-			for (int i = 0; i < outputSize; i++) {
-				previousDelta[b][i] *= output[b][i];
-			}
-		}
+		biasGradient = new float[outputSize];
 
 		for (int i = 0; i < outputSize; i++) {
-			for (double[] d : previousDelta) {
+			for (int b = 0; b < previousDelta.length; b++) {
+				previousDelta[b][i] *= output[b][i];
+			}
+
+			for (float[] d : previousDelta) {
 				biasGradient[i] += d[i];
 			}
 		}
@@ -179,34 +175,26 @@ public class FeedForward implements Layer {
 		return getDelta(previousDelta);
 	}
 
-	private double[][] getDelta(double[][] previousDelta) {
-		double[][] delta = new double[output.length][inputSize];
+	private float[][] getDelta(float[][] previousDelta) {
+		float[][] delta = new float[output.length][inputSize];
 
 		for (int b = 0; b < output.length; b++) {
-			for (int i = 0; i < inputSize; i++) {
-				// dL/dx for the current layer
-				for (int j = 0; j < outputSize; j++) {
-					delta[b][i] += previousDelta[b][j] * weights[i + inputSize * j];
-				}
-			}
+			delta[b] = GPU.sgemm(CLBlastTranspose.CLBlastTransposeNo, CLBlastTranspose.CLBlastTransposeNo, 1,
+				inputSize, outputSize, previousDelta[b], outputSize, weights, inputSize, new float[outputSize], outputSize);
 		}
 
 		return delta;
 	}
 
 	/**
-	 * Calculates the gradient, then stores it, if on gradient check mod. Else, updates the parameters.
+	 * Calculates the gradient, then stores it, if on gradient check mode. Else, updates the parameters.
 	 */
-	private void getGradient(double[][] delta) {
-		gradient = new double[outputSize * inputSize];
+	private void getGradient(float[][] delta) {
+		gradient = new float[outputSize * inputSize];
 
-		IntStream.range(0, output.length).parallel().forEach(b -> {
-			for (int i = 0; i < outputSize; i++) {
-				for (int j = 0; j < inputSize; j++) {
-					gradient[j + inputSize * i] += delta[b][i] * input[b][j];
-				}
-			}
-		});
+		for (int b = 0; b < output.length; b++) {
+			gradient = GPU.sger(outputSize, inputSize, delta[b], input[b], gradient, inputSize);
+		}
 
 		if (mode == Mode.TRAIN) {
 			// updating parameters
@@ -219,7 +207,7 @@ public class FeedForward implements Layer {
 	 *
 	 * @param gradient the weight gradient
 	 */
-	private void update(double[] gradient) {
+	private void update(float[] gradient) {
 		IntStream.range(0, outputSize).parallel().forEach(i -> {
 			biases[i] += biasUpdaters[i].update(biasGradient[i] / output.length);
 
@@ -234,19 +222,19 @@ public class FeedForward implements Layer {
 	public void export(DataOutputStream dos) throws IOException {
 		dos.writeInt(inputSize);
 		dos.writeInt(outputSize);
-		dos.writeDouble(temperature);
+		dos.writeFloat(temperature);
 
 		activation.getType().export(dos);
 		updaterType.export(dos);
 
 		for (int i = 0; i < outputSize; i++) {
-			dos.writeDouble(biases[i]);
+			dos.writeFloat(biases[i]);
 			biasUpdaters[i].export(dos);
 
 			for (int j = 0; j < inputSize; j++) {
 				int index = j + inputSize * i;
 
-				dos.writeDouble(weights[index]);
+				dos.writeFloat(weights[index]);
 				weightUpdaters[index].export(dos);
 			}
 		}
@@ -266,7 +254,7 @@ public class FeedForward implements Layer {
 	@SuppressWarnings("unused")
 	public static class Builder {
 		private int outputSize;
-		private double temperature;
+		private float temperature;
 		private UpdaterType updaterType;
 		private ActivationType activationType;
 		private Initializer initializer;
@@ -294,7 +282,7 @@ public class FeedForward implements Layer {
 		 *
 		 * @param temperature the temperature
 		 */
-		public void setTemperature(double temperature) {
+		public void setTemperature(float temperature) {
 			this.temperature = temperature;
 		}
 

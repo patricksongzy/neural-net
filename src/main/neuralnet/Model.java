@@ -75,8 +75,8 @@ public class Model {
 	 *
 	 * @param target the target
 	 */
-	private void backward(double[][] target) {
-		double[][] delta = layers[layers.length - 1].backward(cost, target);
+	private void backward(float[][] target) {
+		float[][] delta = layers[layers.length - 1].backward(cost, target);
 
 		for (int i = layers.length - 2; i >= 0; i--)
 			delta = layers[i].backward(delta);
@@ -88,7 +88,7 @@ public class Model {
 	 * @param x the input
 	 * @return the output
 	 */
-	public double[][] forward(double[][] x) {
+	public float[][] forward(float[][] x) {
 		for (Layer layer : layers)
 			x = layer.forward(x);
 
@@ -107,7 +107,7 @@ public class Model {
 	}
 
 	/**
-	 * Trains a neural network given a map of <code>double[]</code> and <code>double[]</code>. The keys represent the training data, while
+	 * Trains a neural network given a map of <code>float[]</code> and <code>float[]</code>. The keys represent the training data, while
 	 * the values represent the targets. This works for smaller datasets, but takes lots of memory.
 	 * The batch size dictates the amount of training data the network learns, before updating parameters.
 	 *
@@ -118,7 +118,7 @@ public class Model {
 	 * @param name      the model name
 	 */
 	@SuppressWarnings("unused")
-	public void train(Map<double[], double[]> data, int batchSize, int epochs, int interval, String name) {
+	public void train(Map<float[], float[]> data, int batchSize, int epochs, int interval, String name) {
 		Plot plot = new Plot();
 		JFrame frame = new JFrame("Network Cost");
 		frame.setSize(1600, 800);
@@ -129,7 +129,7 @@ public class Model {
 		// setting mode to training mode
 		setMode(Layer.Mode.TRAIN);
 
-		List<double[]> keys = new ArrayList<>(data.keySet());
+		List<float[]> keys = new ArrayList<>(data.keySet());
 
 		// noinspection IntegerDivisionInFloatingPointContext
 		plot.init(epochs, keys.size() / batchSize + ((keys.size() % batchSize) > 0 ? 1 : 0));
@@ -141,23 +141,23 @@ public class Model {
 
 			// looping through the training set
 			for (int j = 0, batch = 1; j < keys.size(); j += batchSize, batch++) {
-				double error = 0;
+				float error = 0;
 
 				// calculating the batch size
 				int s = (j + batchSize) > keys.size() ? (keys.size() % batchSize) : batchSize;
 
-				double[][] inputs = new double[s][];
-				double[][] targets = new double[s][];
+				float[][] inputs = new float[s][];
+				float[][] targets = new float[s][];
 
 				// creating a batch
 				for (int k = j, b = 0; k < j + s; k++, b++) {
-					double[] input = keys.get(k);
+					float[] input = keys.get(k);
 					inputs[b] = input;
 					targets[b] = data.get(input);
 				}
 
 				// forward propagating the batch
-				double[][] out = forward(inputs);
+				float[][] out = forward(inputs);
 
 				// calculating cost
 				for (int b = 0; b < s; b++) {
@@ -175,7 +175,7 @@ public class Model {
 	}
 
 	/**
-	 * Trains a neural network given a map of <code>double[]</code> and <code>double[]</code>. The keys represent the training data, while
+	 * Trains a neural network given a map of <code>float[]</code> and <code>float[]</code>. The keys represent the training data, while
 	 * the values represent the targets. This works for smaller datasets, but takes lots of memory.
 	 * The batch size dictates the amount of training data the network learns, before updating parameters.
 	 * Targets must be encoded sparsely. This method does not support one-hot encoding, for performance reasons.
@@ -187,7 +187,7 @@ public class Model {
 	 * @param name      the name to export to
 	 */
 	@SuppressWarnings("unused")
-	public void trainRecurrent(Map<double[][], int[]> data, int batchSize, int epochs, int interval,
+	public void trainRecurrent(Map<float[][], int[]> data, int batchSize, int epochs, int interval,
 							   String name) {
 		Plot plot = new Plot();
 		JFrame frame = new JFrame("Network Cost");
@@ -199,7 +199,7 @@ public class Model {
 		// setting mode to training mode
 		setMode(Layer.Mode.TRAIN);
 
-		List<double[][]> keys = new ArrayList<>(data.keySet());
+		List<float[][]> keys = new ArrayList<>(data.keySet());
 
 		// noinspection IntegerDivisionInFloatingPointContext
 		plot.init(epochs, keys.size() / batchSize + ((keys.size() % batchSize) > 0 ? 1 : 0));
@@ -211,25 +211,25 @@ public class Model {
 
 			// looping through the training set
 			for (int j = 0; j < keys.size(); j++) {
-				double[][] key = keys.get(j);
+				float[][] key = keys.get(j);
 				int[] value = data.get(key);
 
 				for (int k = 0, batch = 1; k < key.length; k += batchSize, batch++) {
-					double error = 0;
+					float error = 0;
 
 					int s = (k + batchSize) > key.length ? (key.length % batchSize) : batchSize;
 
-					double[][] inputs = new double[s][];
-					double[][] targets = new double[s][];
+					float[][] inputs = new float[s][];
+					float[][] targets = new float[s][];
 
 					for (int t = k, b = 0; t < k + s; t++, b++) {
 						inputs[b] = key[t];
 
-						targets[b] = new double[]{value[t]};
+						targets[b] = new float[]{value[t]};
 					}
 
 					// forward propagating the batch
-					double[][] out = forward(inputs);
+					float[][] out = forward(inputs);
 
 					// calculating cost
 					for (int b = 0; b < s; b++) {
@@ -255,7 +255,7 @@ public class Model {
 	 * @param input  the input
 	 * @param target the target
 	 */
-	public boolean gradientCheck(double[][] input, double[][] target) {
+	public boolean gradientCheck(float[][] input, float[][] target) {
 		setMode(Layer.Mode.GRADIENT_CHECK);
 
 		forward(input);
@@ -263,7 +263,7 @@ public class Model {
 
 		boolean pass = true;
 		for (Layer layer : layers) {
-			for (double[][] parameters : layer.getParameters()) {
+			for (float[][] parameters : layer.getParameters()) {
 				if (!checkParameters(parameters[0], parameters[1], input, target)) {
 					pass = false;
 					System.err.println("Fail\n\n");
@@ -276,18 +276,18 @@ public class Model {
 		return pass;
 	}
 
-	private boolean checkParameters(double[] parameters, double[] gradient, double[][] x, double[][] target) {
-		double epsilon = 1e-5;
+	private boolean checkParameters(float[] parameters, float[] gradient, float[][] x, float[][] target) {
+		double epsilon = 1e-2;
 		double numerator = 0, denominator = 0;
 
-		double[] numericalGradient = new double[parameters.length];
+		float[] numericalGradient = new float[parameters.length];
 
 		for (int i = 0; i < parameters.length; i++) {
 			parameters[i] += epsilon;
 
-			double[][] y = forward(x);
+			float[][] y = forward(x);
 
-			double plus = 0;
+			float plus = 0;
 			for (int t = 0; t < x.length; t++)
 				plus += cost.cost(y[t], target[t]);
 
@@ -295,7 +295,7 @@ public class Model {
 
 			y = forward(x);
 
-			double minus = 0;
+			float minus = 0;
 			for (int t = 0; t < x.length; t++)
 				minus += cost.cost(y[t], target[t]);
 
@@ -313,7 +313,8 @@ public class Model {
 
 		System.out.println(numerator / denominator + "\n---------------------");
 
-		return (numerator / denominator) < 1e-7;
+		// gradient check doesn't mean much with FP32
+		return (numerator / denominator) < 1e-2;
 	}
 
 	/**

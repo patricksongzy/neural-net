@@ -16,16 +16,16 @@ public class Dropout implements Layer {
 	private Mode mode = Mode.TRAIN;
 
 	private int inputSize;
-	private double dropout;
-	private double[][] output;
+	private float dropout;
+	private float[][] output;
 
-	private Dropout(double dropout) {
+	private Dropout(float dropout) {
 		this.dropout = dropout;
 	}
 
 	Dropout(DataInputStream dis) throws IOException {
 		inputSize = dis.readInt();
-		dropout = dis.readDouble();
+		dropout = dis.readFloat();
 	}
 
 	public void setDimensions(int... dimensions) {
@@ -36,7 +36,7 @@ public class Dropout implements Layer {
 		this.mode = mode;
 	}
 
-	public double[][] backward(Cost cost, double[][] target) {
+	public float[][] backward(Cost cost, float[][] target) {
 		return cost.derivative(output, target, new Identity());
 	}
 
@@ -44,7 +44,7 @@ public class Dropout implements Layer {
 		return LayerType.DROPOUT;
 	}
 
-	public double[][] backward(double[][] previousDelta) {
+	public float[][] backward(float[][] previousDelta) {
 		return previousDelta;
 	}
 
@@ -52,18 +52,18 @@ public class Dropout implements Layer {
 		return new int[]{inputSize};
 	}
 
-	public double[][][] getParameters() {
-		return new double[0][][];
+	public float[][][] getParameters() {
+		return new float[0][][];
 	}
 
-	public double[][] forward(double[][] x) {
+	public float[][] forward(float[][] x) {
 		if (mode == Mode.TRAIN) {
-			output = new double[x.length][x[0].length];
+			output = new float[x.length][x[0].length];
 
 			IntStream.range(0, x.length).parallel().forEach(b -> {
 				for (int i = 0; i < x[0].length; i++) {
-					// if a random double is past the dropout threshold, then drop the connection by setting the output to zero
-					if (ThreadLocalRandom.current().nextDouble() < dropout)
+					// if a random float is past the dropout threshold, then drop the connection by setting the output to zero
+					if (ThreadLocalRandom.current().nextFloat() < dropout)
 						output[b][i] = 0;
 					else
 						output[b][i] = x[b][i] / dropout;
@@ -79,7 +79,7 @@ public class Dropout implements Layer {
 
 	public void export(DataOutputStream dos) throws IOException {
 		dos.writeInt(inputSize);
-		dos.writeDouble(dropout);
+		dos.writeFloat(dropout);
 	}
 
 	/**
@@ -87,14 +87,14 @@ public class Dropout implements Layer {
 	 */
 	@SuppressWarnings("unused")
 	public static class Builder {
-		private double dropout = 0.5;
+		private float dropout = 0.5f;
 
 		/**
 		 * The dropout is the chance that a connection will be dropped, during training.
 		 *
 		 * @param dropout the dropout
 		 */
-		public Builder dropout(double dropout) {
+		public Builder dropout(float dropout) {
 			this.dropout = dropout;
 			return this;
 		}

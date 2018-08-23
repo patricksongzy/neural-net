@@ -17,14 +17,14 @@ import java.util.stream.IntStream;
 
 public class GRU implements Layer {
 	private Mode mode = Mode.TRAIN;
-	private double[] wz, wr, w;
-	private double[] dWz, dWr, dW;
-	private double[] uz, ur, u;
-	private double[] dUz, dUr, dU;
-	private double[] bz, br, b;
-	private double[] dBz, dBr, dB;
-	private double[] state;
-	private double[][] x, z, r, hc, h, y;
+	private float[] wz, wr, w;
+	private float[] dWz, dWr, dW;
+	private float[] uz, ur, u;
+	private float[] dUz, dUr, dU;
+	private float[] bz, br, b;
+	private float[] dBz, dBr, dB;
+	private float[] state;
+	private float[][] x, z, r, hc, h, y;
 
 	private int inputSize, hiddenSize;
 
@@ -41,15 +41,15 @@ public class GRU implements Layer {
 		this.updaterType = updaterType;
 		this.initializer = initializer;
 
-		state = new double[hiddenSize];
+		state = new float[hiddenSize];
 
-		uz = new double[hiddenSize * hiddenSize];
-		ur = new double[hiddenSize * hiddenSize];
-		u = new double[hiddenSize * hiddenSize];
+		uz = new float[hiddenSize * hiddenSize];
+		ur = new float[hiddenSize * hiddenSize];
+		u = new float[hiddenSize * hiddenSize];
 
-		bz = new double[hiddenSize];
-		br = new double[hiddenSize];
-		b = new double[hiddenSize];
+		bz = new float[hiddenSize];
+		br = new float[hiddenSize];
+		b = new float[hiddenSize];
 
 		for (int i = 0; i < hiddenSize * hiddenSize; i++) {
 			uz[i] = initializer.initialize(hiddenSize);
@@ -64,17 +64,17 @@ public class GRU implements Layer {
 
 		updaters = new Updater[3 * hiddenSize * inputSize + 3 * hiddenSize * hiddenSize + 3 * hiddenSize];
 
-		wz = new double[hiddenSize * inputSize];
-		wr = new double[hiddenSize * inputSize];
-		w = new double[hiddenSize * inputSize];
+		wz = new float[hiddenSize * inputSize];
+		wr = new float[hiddenSize * inputSize];
+		w = new float[hiddenSize * inputSize];
 
-		uz = new double[hiddenSize * hiddenSize];
-		ur = new double[hiddenSize * hiddenSize];
-		u = new double[hiddenSize * hiddenSize];
+		uz = new float[hiddenSize * hiddenSize];
+		ur = new float[hiddenSize * hiddenSize];
+		u = new float[hiddenSize * hiddenSize];
 
-		bz = new double[hiddenSize];
-		br = new double[hiddenSize];
-		b = new double[hiddenSize];
+		bz = new float[hiddenSize];
+		br = new float[hiddenSize];
+		b = new float[hiddenSize];
 
 		hiddenActivation = ActivationType.fromString(dis).create();
 		activation = ActivationType.fromString(dis).create();
@@ -82,29 +82,29 @@ public class GRU implements Layer {
 
 		int position = 0;
 		for (int i = 0; i < hiddenSize * inputSize; i++) {
-			wz[i] = dis.readDouble();
+			wz[i] = dis.readFloat();
 			updaters[position++] = updaterType.create(dis);
-			wr[i] = dis.readDouble();
+			wr[i] = dis.readFloat();
 			updaters[position++] = updaterType.create(dis);
-			w[i] = dis.readDouble();
-			updaters[position++] = updaterType.create(dis);
-		}
-
-		for (int i = 0; i < hiddenSize * inputSize; i++) {
-			uz[i] = dis.readDouble();
-			updaters[position++] = updaterType.create(dis);
-			ur[i] = dis.readDouble();
-			updaters[position++] = updaterType.create(dis);
-			u[i] = dis.readDouble();
+			w[i] = dis.readFloat();
 			updaters[position++] = updaterType.create(dis);
 		}
 
 		for (int i = 0; i < hiddenSize * inputSize; i++) {
-			bz[i] = dis.readDouble();
+			uz[i] = dis.readFloat();
 			updaters[position++] = updaterType.create(dis);
-			br[i] = dis.readDouble();
+			ur[i] = dis.readFloat();
 			updaters[position++] = updaterType.create(dis);
-			b[i] = dis.readDouble();
+			u[i] = dis.readFloat();
+			updaters[position++] = updaterType.create(dis);
+		}
+
+		for (int i = 0; i < hiddenSize * inputSize; i++) {
+			bz[i] = dis.readFloat();
+			updaters[position++] = updaterType.create(dis);
+			br[i] = dis.readFloat();
+			updaters[position++] = updaterType.create(dis);
+			b[i] = dis.readFloat();
 			updaters[position++] = updaterType.create(dis);
 		}
 	}
@@ -125,9 +125,9 @@ public class GRU implements Layer {
 		for (int i = 0; i < updaters.length; i++)
 			updaters[i] = updaterType.create();
 
-		wz = new double[hiddenSize * inputSize];
-		wr = new double[hiddenSize * inputSize];
-		w = new double[hiddenSize * inputSize];
+		wz = new float[hiddenSize * inputSize];
+		wr = new float[hiddenSize * inputSize];
+		w = new float[hiddenSize * inputSize];
 
 		for (int i = 0; i < hiddenSize * inputSize; i++) {
 			wz[i] = initializer.initialize(inputSize);
@@ -155,13 +155,13 @@ public class GRU implements Layer {
 		exportParameters(position, hiddenSize, bz, br, b, dos);
 	}
 
-	private int exportParameters(int position, int length, double[] pz, double[] pr, double[] p, DataOutputStream dos) throws IOException {
+	private int exportParameters(int position, int length, float[] pz, float[] pr, float[] p, DataOutputStream dos) throws IOException {
 		for (int i = 0; i < length; i++) {
-			dos.writeDouble(pz[i]);
+			dos.writeFloat(pz[i]);
 			updaters[position++].export(dos);
-			dos.writeDouble(pr[i]);
+			dos.writeFloat(pr[i]);
 			updaters[position++].export(dos);
-			dos.writeDouble(p[i]);
+			dos.writeFloat(p[i]);
 			updaters[position++].export(dos);
 		}
 
@@ -171,10 +171,10 @@ public class GRU implements Layer {
 	public void setMode(Mode mode) {
 		if (mode == Mode.GRADIENT_CHECK) {
 			for (int i = 0; i < state.length; i++) {
-				state[i] = ThreadLocalRandom.current().nextDouble();
+				state[i] = ThreadLocalRandom.current().nextFloat();
 			}
 		} else {
-			state = new double[hiddenSize];
+			state = new float[hiddenSize];
 		}
 
 		this.mode = mode;
@@ -184,14 +184,14 @@ public class GRU implements Layer {
 		return LayerType.GRU;
 	}
 
-	public double[][] forward(double[][] x) {
+	public float[][] forward(float[][] x) {
 		this.x = x;
 
-		hc = new double[x.length][hiddenSize];
-		z = new double[x.length][hiddenSize];
-		r = new double[x.length][hiddenSize];
-		h = new double[x.length + 1][hiddenSize];
-		y = new double[x.length][];
+		hc = new float[x.length][hiddenSize];
+		z = new float[x.length][hiddenSize];
+		r = new float[x.length][hiddenSize];
+		h = new float[x.length + 1][hiddenSize];
+		y = new float[x.length][];
 
 		h[0] = state;
 
@@ -216,7 +216,7 @@ public class GRU implements Layer {
 			hiddenActivation.activation(z[time]);
 			hiddenActivation.activation(r[time]);
 
-			double[] product = new double[hiddenSize];
+			float[] product = new float[hiddenSize];
 			IntStream.range(0, hiddenSize).parallel().forEach(i -> product[i] += r[time][i] * h[time][i]);
 
 			IntStream.range(0, hiddenSize).parallel().forEach(i -> {
@@ -244,58 +244,58 @@ public class GRU implements Layer {
 		return y;
 	}
 
-	public double[][] backward(Cost cost, double[][] target) {
-		dWz = new double[hiddenSize * inputSize];
-		dWr = new double[hiddenSize * inputSize];
-		dW = new double[hiddenSize * inputSize];
+	public float[][] backward(Cost cost, float[][] target) {
+		dWz = new float[hiddenSize * inputSize];
+		dWr = new float[hiddenSize * inputSize];
+		dW = new float[hiddenSize * inputSize];
 
-		dUz = new double[hiddenSize * hiddenSize];
-		dUr = new double[hiddenSize * hiddenSize];
-		dU = new double[hiddenSize * hiddenSize];
+		dUz = new float[hiddenSize * hiddenSize];
+		dUr = new float[hiddenSize * hiddenSize];
+		dU = new float[hiddenSize * hiddenSize];
 
-		dBz = new double[hiddenSize];
-		dBr = new double[hiddenSize];
-		dB = new double[hiddenSize];
+		dBz = new float[hiddenSize];
+		dBr = new float[hiddenSize];
+		dB = new float[hiddenSize];
 
-		double[][] dx = new double[x.length][inputSize];
-		double[][] dy = cost.derivative(y, target, new Identity());
+		float[][] dx = new float[x.length][inputSize];
+		float[][] dy = cost.derivative(y, target, new Identity());
 
 		backward(dy, dx);
 
 		return dx;
 	}
 
-	public double[][] backward(double[][] previousDelta) {
-		dWz = new double[hiddenSize * inputSize];
-		dWr = new double[hiddenSize * inputSize];
-		dW = new double[hiddenSize * inputSize];
+	public float[][] backward(float[][] previousDelta) {
+		dWz = new float[hiddenSize * inputSize];
+		dWr = new float[hiddenSize * inputSize];
+		dW = new float[hiddenSize * inputSize];
 
-		dUz = new double[hiddenSize * hiddenSize];
-		dUr = new double[hiddenSize * hiddenSize];
-		dU = new double[hiddenSize * hiddenSize];
+		dUz = new float[hiddenSize * hiddenSize];
+		dUr = new float[hiddenSize * hiddenSize];
+		dU = new float[hiddenSize * hiddenSize];
 
-		dBz = new double[hiddenSize];
-		dBr = new double[hiddenSize];
-		dB = new double[hiddenSize];
+		dBz = new float[hiddenSize];
+		dBr = new float[hiddenSize];
+		dB = new float[hiddenSize];
 
-		double[][] dx = new double[x.length][inputSize];
+		float[][] dx = new float[x.length][inputSize];
 
 		backward(previousDelta, dx);
 
 		return dx;
 	}
 
-	private void backward(double[][] previousDelta, double[][] dx) {
+	private void backward(float[][] previousDelta, float[][] dx) {
 		// these variable represent before-activation derivatives
-		double[] dh = new double[hiddenSize];
-		double[] dr = new double[hiddenSize];
-		double[] dz = new double[hiddenSize];
-		double[] dhc = new double[hiddenSize];
+		float[] dh = new float[hiddenSize];
+		float[] dr = new float[hiddenSize];
+		float[] dz = new float[hiddenSize];
+		float[] dhc = new float[hiddenSize];
 
 		// activation derivatives
-		double[][] derivative = activation.derivative(hc);
-		double[][] dzActivation = hiddenActivation.derivative(z);
-		double[][] drActivation = hiddenActivation.derivative(r);
+		float[][] derivative = activation.derivative(hc);
+		float[][] dzActivation = hiddenActivation.derivative(z);
+		float[][] drActivation = hiddenActivation.derivative(r);
 
 		for (int t = x.length - 1; t >= 0; t--) {
 			final int time = t;
@@ -307,7 +307,7 @@ public class GRU implements Layer {
 
 			IntStream.range(0, hiddenSize).parallel().forEach(i -> {
 				// dhc/dht-1
-				double dhNext = 0;
+				float dhNext = 0;
 
 				for (int j = 0; j < hiddenSize; j++) {
 					dhNext += u[i + hiddenSize * j] * dhc[j];
@@ -335,7 +335,7 @@ public class GRU implements Layer {
 				}
 			});
 
-			double[] product = new double[hiddenSize];
+			float[] product = new float[hiddenSize];
 
 			IntStream.range(0, hiddenSize).parallel().forEach(i -> product[i] = r[time][i] * h[time][i]);
 
@@ -362,8 +362,8 @@ public class GRU implements Layer {
 			update();
 	}
 
-	public double[][][] getParameters() {
-		return new double[][][]{{wz, dWz}, {wr, dWr}, {w, dW}, {uz, dUz}, {ur, dUr}, {u, dU}, {bz, dBz}, {br, dBr}, {b, dB}};
+	public float[][][] getParameters() {
+		return new float[][][]{{wz, dWz}, {wr, dWr}, {w, dW}, {uz, dUz}, {ur, dUr}, {u, dU}, {bz, dBz}, {br, dBr}, {b, dB}};
 	}
 
 	private void update() {

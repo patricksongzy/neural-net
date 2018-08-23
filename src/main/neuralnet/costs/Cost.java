@@ -20,7 +20,7 @@ public interface Cost {
 	 * @param target the target
 	 * @return the cost
 	 */
-	double cost(double[] out, double[] target);
+	float cost(float[] out, float[] target);
 
 	/**
 	 * This method calculates the derivative of the cost.
@@ -30,5 +30,5 @@ public interface Cost {
 	 * @param activation the activation function
 	 * @return the derivative of cost
 	 */
-	double[][] derivative(double[][] output, double[][] target, Activation activation);
+	float[][] derivative(float[][] output, float[][] target, Activation activation);
 }

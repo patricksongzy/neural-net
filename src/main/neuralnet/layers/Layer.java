@@ -31,7 +31,7 @@ public interface Layer {
 
 	 * @return the parameters and gradients
 	 */
-	double[][][] getParameters();
+	float[][][] getParameters();
 
 	/**
 	 * Forward propagation of a layer.
@@ -39,7 +39,7 @@ public interface Layer {
 	 * @param x the input
 	 * @return the output
 	 */
-	double[][] forward(double[][] x);
+	float[][] forward(float[][] x);
 
 	/**
 	 * Back propagation of an output layer.
@@ -48,7 +48,7 @@ public interface Layer {
 	 * @param target the target output
 	 * @return the delta
 	 */
-	double[][] backward(Cost cost, double[][] target);
+	float[][] backward(Cost cost, float[][] target);
 
 	/**
 	 * Back propagation of a hidden layer, given the layer that was back propagated before.
@@ -56,7 +56,7 @@ public interface Layer {
 	 * @param previousDelta the previous delta
 	 * @return the delta
 	 */
-	double[][] backward(double[][] previousDelta);
+	float[][] backward(float[][] previousDelta);
 
 	/**
 	 * Gets the output dimensions, for initializing following layers.

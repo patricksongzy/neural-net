@@ -11,19 +11,19 @@ public class Softmax implements Activation {
 		return ActivationType.SOFTMAX;
 	}
 
-	public void activation(double[] x) {
-		double top = Float.NEGATIVE_INFINITY;
-		AtomicReference<Double> sum = new AtomicReference<>((double) 0);
+	public void activation(float[] x) {
+		float top = Float.NEGATIVE_INFINITY;
+		AtomicReference<Float> sum = new AtomicReference<>((float) 0);
 
-		for (double value : x) {
+		for (float value : x) {
 			if (value > top) {
 				top = value;
 			}
 		}
 
-		final double max = top;
+		final float max = top;
 		IntStream.range(0, x.length).parallel().forEach(i -> {
-			double value = Math.exp(x[i] - max);
+			float value = (float) Math.exp(x[i] - max);
 
 			sum.updateAndGet(v -> v + value);
 			x[i] = value;
@@ -33,9 +33,9 @@ public class Softmax implements Activation {
 			x[i] /= sum.get();
 	}
 
-	public void activation(double[][] x) {
-		double[] sum = new double[x.length];
-		double[] max = new double[x.length];
+	public void activation(float[][] x) {
+		float[] sum = new float[x.length];
+		float[] max = new float[x.length];
 
 		IntStream.range(0, x.length).parallel().forEach(b -> {
 			max[b] = Float.NEGATIVE_INFINITY;
@@ -45,7 +45,7 @@ public class Softmax implements Activation {
 					max[b] = x[b][i];
 
 			for (int i = 0; i < x[0].length; i++) {
-				double value = Math.exp(x[b][i] - max[b]);
+				float value = (float) Math.exp(x[b][i] - max[b]);
 
 				sum[b] += value;
 				x[b][i] = value;
@@ -56,7 +56,7 @@ public class Softmax implements Activation {
 		});
 	}
 
-	public double[][] derivative(double[][] x) {
+	public float[][] derivative(float[][] x) {
 		return x;
 	}
 }

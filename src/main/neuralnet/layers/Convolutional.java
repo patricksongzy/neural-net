@@ -42,9 +42,9 @@ public class Convolutional implements Layer {
 	// the input width and input height are the heights and widths of the inputs provided to the layer
 	private int inputHeight, inputWidth, depth;
 
-	private double[] filters, biases;
-	private double[] gradient, biasGradient;
-	private double[][] input, output;
+	private float[] filters, biases;
+	private float[] gradient, biasGradient;
+	private float[][] input, output;
 
 	private Convolutional(int pad, int stride, int filterAmount, int filterSize, Initializer initializer, UpdaterType updaterType,
 						  ActivationType activationType) {
@@ -78,16 +78,16 @@ public class Convolutional implements Layer {
 		filterSize = dis.readInt();
 
 		filterUpdaters = new Updater[filterAmount * depth * filterSize * filterSize];
-		filters = new double[filterAmount * depth * filterSize * filterSize];
+		filters = new float[filterAmount * depth * filterSize * filterSize];
 
 		biasUpdaters = new Updater[filterAmount];
-		biases = new double[filterAmount];
+		biases = new float[filterAmount];
 
 		activation = ActivationType.fromString(dis).create();
 		updaterType = UpdaterType.fromString(dis);
 
 		for (int f = 0; f < filterAmount; f++) {
-			biases[f] = dis.readDouble();
+			biases[f] = dis.readFloat();
 			biasUpdaters[f] = updaterType.create(dis);
 
 			for (int k = 0; k < depth; k++) {
@@ -95,7 +95,7 @@ public class Convolutional implements Layer {
 					for (int n = 0; n < filterSize; n++) {
 						int index = n + filterSize * (m + filterSize * (k + depth * f));
 
-						filters[index] = dis.readDouble();
+						filters[index] = dis.readFloat();
 						filterUpdaters[index] = updaterType.create(dis);
 					}
 				}
@@ -123,10 +123,10 @@ public class Convolutional implements Layer {
 		this.outputWidth = (padWidth - filterSize) / stride + 1;
 
 		filterUpdaters = new Updater[filterAmount * depth * filterSize * filterSize];
-		filters = new double[filterAmount * depth * filterSize * filterSize];
+		filters = new float[filterAmount * depth * filterSize * filterSize];
 
 		biasUpdaters = new Updater[filterAmount];
-		biases = new double[filterAmount];
+		biases = new float[filterAmount];
 
 		int inputSize = depth * filterSize * filterSize;
 
@@ -155,10 +155,10 @@ public class Convolutional implements Layer {
 	 * @param input the input
 	 * @return the padded input
 	 */
-	public double[][] pad(double[][] input) {
+	public float[][] pad(float[][] input) {
 		if (pad > 0) {
 			// creating an array, with the dimensions of the padded input
-			double[][] out = new double[input.length][depth * padHeight * padWidth];
+			float[][] out = new float[input.length][depth * padHeight * padWidth];
 
 			// padding the array
 			for (int i = 0; i < input.length; i++) {
@@ -188,10 +188,10 @@ public class Convolutional implements Layer {
 		return input;
 	}
 
-	public double[][] forward(double[][] x) {
+	public float[][] forward(float[][] x) {
 		input = pad(x);
 
-		output = new double[x.length][filterAmount * outputHeight * outputWidth];
+		output = new float[x.length][filterAmount * outputHeight * outputWidth];
 
 		IntStream.range(0, x.length).parallel().forEach(b -> {
 			for (int f = 0; f < filterAmount; f++) {
@@ -202,7 +202,7 @@ public class Convolutional implements Layer {
 						int w = j * stride;
 
 						// convoluted value is the sum of the filters multiplied against the inputs at a certain position
-						double conv = 0;
+						float conv = 0;
 
 						for (int k = 0; k < depth; k++) {
 							for (int m = 0; m < filterSize; m++) {
@@ -229,17 +229,17 @@ public class Convolutional implements Layer {
 		return output;
 	}
 
-	public double[][] backward(Cost cost, double[][] target) {
+	public float[][] backward(Cost cost, float[][] target) {
 		// back propagation on the Convolutional layers are calculated a layer ahead
-		double[][] previousDelta = cost.derivative(output, target, activation);
+		float[][] previousDelta = cost.derivative(output, target, activation);
 
 		return backward(previousDelta);
 	}
 
-	public double[][] backward(double[][] previousDelta) {
+	public float[][] backward(float[][] previousDelta) {
 		// back propagation on the Convolutional layers are calculated a layer ahead
-		double[][] delta = new double[output.length][depth * padHeight * padWidth];
-		biasGradient = new double[filterAmount];
+		float[][] delta = new float[output.length][depth * padHeight * padWidth];
+		biasGradient = new float[filterAmount];
 
 		// derivative
 		output = activation.derivative(output);
@@ -251,7 +251,7 @@ public class Convolutional implements Layer {
 			}
 		}
 
-		gradient = new double[filterAmount * depth * filterSize * filterSize];
+		gradient = new float[filterAmount * depth * filterSize * filterSize];
 
 		IntStream.range(0, output.length).parallel().forEach(b -> {
 			for (int f = 0; f < filterAmount; f++) {
@@ -260,7 +260,7 @@ public class Convolutional implements Layer {
 						int index = j + outputWidth * (i + outputHeight * f);
 
 						// the bias gradient is the delta, since biases are just added to the output
-						double d = previousDelta[b][index];
+						float d = previousDelta[b][index];
 						biasGradient[f] += d;
 
 						for (int k = 0; k < depth; k++) {
@@ -322,7 +322,7 @@ public class Convolutional implements Layer {
 	 * @param delta    the bias gradient
 	 * @param gradient the weight gradient
 	 */
-	private void update(double[] delta, double[] gradient) {
+	private void update(float[] delta, float[] gradient) {
 		IntStream.range(0, filterAmount).parallel().forEach(f -> {
 			biases[f] += biasUpdaters[f].update(delta[f] / output.length);
 
@@ -338,8 +338,8 @@ public class Convolutional implements Layer {
 		});
 	}
 
-	public double[][][] getParameters() {
-		return new double[][][]{{filters, gradient}, {biases, biasGradient}};
+	public float[][][] getParameters() {
+		return new float[][][]{{filters, gradient}, {biases, biasGradient}};
 	}
 
 	public void export(DataOutputStream dos) throws IOException {
@@ -359,7 +359,7 @@ public class Convolutional implements Layer {
 		updaterType.export(dos);
 
 		for (int f = 0; f < filterAmount; f++) {
-			dos.writeDouble(biases[f]);
+			dos.writeFloat(biases[f]);
 			biasUpdaters[f].export(dos);
 
 			for (int k = 0; k < depth; k++) {
@@ -367,7 +367,7 @@ public class Convolutional implements Layer {
 					for (int n = 0; n < filterSize; n++) {
 						int index = n + filterSize * (m + filterSize * (k + depth * f));
 
-						dos.writeDouble(filters[index]);
+						dos.writeFloat(filters[index]);
 						filterUpdaters[index].export(dos);
 					}
 				}

@@ -3,10 +3,10 @@ package main.neuralnet.initializers;
 import java.util.concurrent.ThreadLocalRandom;
 
 public class HeInitialization implements Initializer {
-	public double initialize(int inputSize) {
+	public float initialize(int inputSize) {
 		double r = Math.sqrt(2.0 / inputSize); // recommended for ReLU
 
-		return truncatedNormal(r);
+		return (float) truncatedNormal(r);
 	}
 
 	private static double truncatedNormal(double stddev) {

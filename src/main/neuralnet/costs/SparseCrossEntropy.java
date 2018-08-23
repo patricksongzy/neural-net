@@ -13,16 +13,16 @@ public class SparseCrossEntropy implements Cost {
 		return CostType.CROSS_ENTROPY;
 	}
 
-	public double cost(double[] out, double[] target) {
+	public float cost(float[] out, float[] target) {
 		if (target.length > 1 || target[0] > out.length)
 			throw new IllegalArgumentException();
 
-		return -Math.log(out[(int) target[0]] + 1e-16);
+		return (float) -Math.log(out[(int) target[0]] + 1e-16);
 	}
 
-	public double[][] derivative(double[][] output, double[][] target, Activation activation) {
-		double[][] delta = new double[output.length][output[0].length];
-		double[][] derivative = activation.derivative(output);
+	public float[][] derivative(float[][] output, float[][] target, Activation activation) {
+		float[][] delta = new float[output.length][output[0].length];
+		float[][] derivative = activation.derivative(output);
 
 		if (activation.getType() == ActivationType.SOFTMAX) {
 			IntStream.range(0, output.length).parallel().forEach(b -> {

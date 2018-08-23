@@ -10,7 +10,7 @@ public class ReLU implements Activation {
 		return ActivationType.RELU;
 	}
 
-	public void activation(double[] x) {
+	public void activation(float[] x) {
 		IntStream.range(0, x.length).parallel().forEach(i -> {
 			// same as max of 0 and x
 			if (x[i] < 0)
@@ -18,7 +18,7 @@ public class ReLU implements Activation {
 		});
 	}
 
-	public void activation(double[][] x) {
+	public void activation(float[][] x) {
 		IntStream.range(0, x.length).parallel().forEach(b -> {
 			for (int i = 0; i < x[0].length; i++)
 				// same as max of 0 and x
@@ -27,8 +27,8 @@ public class ReLU implements Activation {
 		});
 	}
 
-	public double[][] derivative(double[][] x) {
-		double[][] derivative = new double[x.length][x[0].length];
+	public float[][] derivative(float[][] x) {
+		float[][] derivative = new float[x.length][x[0].length];
 
 		IntStream.range(0, x.length).parallel().forEach(b -> {
 			// assuming the derivative at 0 is equal to 0

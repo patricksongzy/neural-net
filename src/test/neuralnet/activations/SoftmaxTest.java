@@ -11,9 +11,9 @@ class SoftmaxTest {
 
 	@Test
 	void activation() {
-		double[] input = new double[] {-1000, -2000, -3000};
+		float[] input = new float[]{-1000, -2000, -3000};
 		softmax.activation(input);
 
-		assertArrayEquals(new double[] {1, 0, 0}, input);
+		assertArrayEquals(new float[]{1, 0, 0}, input);
 	}
 }

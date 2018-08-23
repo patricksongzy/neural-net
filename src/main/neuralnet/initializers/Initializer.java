@@ -10,5 +10,5 @@ public interface Initializer {
 	 * @param inputSize the input size
 	 * @return the weight
 	 */
-	double initialize(int inputSize);
+	float initialize(int inputSize);
 }

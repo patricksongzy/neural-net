@@ -19,7 +19,7 @@ public class Pooling implements Layer {
 	private int downsampleSize, downsampleStride;
 
 	private byte[][] switches;
-	private double[][] output;
+	private float[][] output;
 
 	private Pooling(int downsampleSize, int downsampleStride) {
 		this.downsampleSize = downsampleSize;
@@ -54,9 +54,9 @@ public class Pooling implements Layer {
 		this.downsampleHeight = (inputHeight - downsampleSize) / downsampleStride + 1;
 	}
 
-	public double[][] forward(double[][] input) {
+	public float[][] forward(float[][] input) {
 		switches = new byte[input.length][filterAmount * inputHeight * inputWidth];
-		output = new double[input.length][filterAmount * downsampleHeight * downsampleWidth];
+		output = new float[input.length][filterAmount * downsampleHeight * downsampleWidth];
 
 		IntStream.range(0, input.length).parallel().forEach(b -> {
 			for (int f = 0; f < filterAmount; f++) {
@@ -66,12 +66,12 @@ public class Pooling implements Layer {
 						int w = j * downsampleStride;
 
 						int index = 0;
-						double max = Double.NEGATIVE_INFINITY;
+						float max = Float.NEGATIVE_INFINITY;
 
 						for (int m = 0; m < downsampleSize; m++) {
 							for (int n = 0; n < downsampleSize; n++) {
 								int outputIndex = (w + n) + inputWidth * ((h + m) + inputHeight * f);
-								double value = input[b][outputIndex];
+								float value = input[b][outputIndex];
 
 								// finding the max value
 								if (value > max) {
@@ -92,14 +92,14 @@ public class Pooling implements Layer {
 		return output;
 	}
 
-	public double[][] backward(Cost cost, double[][] target) {
-		double[][] delta = cost.derivative(output, target, new Identity());
+	public float[][] backward(Cost cost, float[][] target) {
+		float[][] delta = cost.derivative(output, target, new Identity());
 
 		return backward(delta);
 	}
 
-	public double[][] backward(double[][] previousDelta) {
-		double[][] upsampled = new double[output.length][filterAmount * inputHeight * inputWidth];
+	public float[][] backward(float[][] previousDelta) {
+		float[][] upsampled = new float[output.length][filterAmount * inputHeight * inputWidth];
 
 		IntStream.range(0, output.length).parallel().forEach(b -> {
 			for (int f = 0; f < filterAmount; f++) {
@@ -128,8 +128,8 @@ public class Pooling implements Layer {
 		return upsampled;
 	}
 
-	public double[][][] getParameters() {
-		return new double[0][][];
+	public float[][][] getParameters() {
+		return new float[0][][];
 	}
 
 	public int[] getOutputDimensions() {

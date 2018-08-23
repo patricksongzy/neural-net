@@ -7,19 +7,19 @@ public class Sigmoid implements Activation{
 		return ActivationType.SIGMOID;
 	}
 
-	public void activation(double[] x) {
-		IntStream.range(0, x.length).parallel().forEach(i -> x[i] = 1 / (1 + Math.exp(-x[i])));
+	public void activation(float[] x) {
+		IntStream.range(0, x.length).parallel().forEach(i -> x[i] = 1 / (float) (1 + Math.exp(-x[i])));
 	}
 
-	public void activation(double[][] x) {
+	public void activation(float[][] x) {
 		IntStream.range(0, x.length).parallel().forEach(b -> {
 			for (int i = 0; i < x[0].length; i++)
-				x[b][i] = 1 / (1 + Math.exp(-x[b][i]));
+				x[b][i] = 1 / (float) (1 + Math.exp(-x[b][i]));
 		});
 	}
 
-	public double[][] derivative(double[][] x) {
-		double[][] derivative = new double[x.length][x[0].length];
+	public float[][] derivative(float[][] x) {
+		float[][] derivative = new float[x.length][x[0].length];
 
 		IntStream.range(0, x.length).parallel().forEach(b -> {
 			// assuming the derivative at 0 is equal to 0
