@@ -275,7 +275,7 @@ public class Model {
 	}
 
 	private boolean checkParameters(float[] parameters, float[] gradient, float[][] x, float[][] target) {
-		double epsilon = 1e-2;
+		double epsilon = 1e-3;
 		double numerator = 0, denominator = 0;
 
 		float[] numericalGradient = new float[parameters.length];
