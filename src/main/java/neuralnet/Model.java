@@ -185,8 +185,7 @@ public class Model {
 	 * @param interval  the interval to export
 	 * @param name      the name to export to
 	 */
-	public void trainRecurrent(Map<float[][], int[]> data, int batchSize, int epochs, int interval,
-							   String name) {
+	public void trainRecurrent(Map<float[][], int[]> data, int batchSize, int epochs, int interval, String name) {
 		Plot plot = new Plot();
 		JFrame frame = new JFrame("Network Cost");
 		frame.setSize(1600, 800);
@@ -275,7 +274,7 @@ public class Model {
 	}
 
 	private boolean checkParameters(float[] parameters, float[] gradient, float[][] x, float[][] target) {
-		double epsilon = 1e-3;
+		double epsilon = 1e-2;
 		double numerator = 0, denominator = 0;
 
 		float[] numericalGradient = new float[parameters.length];

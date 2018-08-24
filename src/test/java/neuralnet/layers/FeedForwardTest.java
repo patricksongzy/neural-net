@@ -27,6 +27,6 @@ class FeedForwardTest {
 		Model model = new Model.Builder().add(new FeedForward.Builder().outputSize(5).build())
 			.add(new FeedForward.Builder().outputSize(5).activationType(ActivationType.SOFTMAX).build()).inputDimensions(2)
 			.cost(CostType.CROSS_ENTROPY).build();
-		assertTrue(model.gradientCheck(new float[][]{{0.2f, 1}}, new float[][]{{0.1f, 0.05f, 0.55f, 0.2f, 0.1f}}));
+		assertTrue(model.gradientCheck(new float[][]{{0.2f, 0.8f}}, new float[][]{{0.3f, 0.1f, 0.3f, 0.2f, 0.1f}}));
 	}
 }
