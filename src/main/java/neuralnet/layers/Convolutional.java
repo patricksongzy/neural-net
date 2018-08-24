@@ -162,23 +162,17 @@ public class Convolutional implements Layer {
 
 			// padding the array
 			for (int i = 0; i < input.length; i++) {
-				int j = 0;
+				int position = 0;
 
-				for (int d = 0; d < depth; d++) {
-					int offset = 0;
-					int index = 0;
+				for (int j = 0; j < depth; j++) {
+					position += pad * padWidth;
 
-					offset += padWidth * pad;
-
-					for (int h = 0; h < inputHeight; h++) {
-						offset += pad;
-
-						for (int w = 0; w < inputWidth; w++) {
-							out[i][d * padHeight * padWidth + index++ + offset] = input[i][j++];
-						}
-
-						offset += pad;
+					for (int k = 0; k < inputWidth * inputHeight; k += inputWidth) {
+						System.arraycopy(input[i], j * inputWidth * inputHeight + k, out[i], pad + position, inputWidth);
+						position += padWidth;
 					}
+
+					position += pad * padWidth;
 				}
 			}
 

@@ -312,7 +312,7 @@ public class Model {
 		System.out.println(numerator / denominator + "\n---------------------");
 
 		// gradient check doesn't mean much with FP32
-		return (numerator / denominator) < 0.01;
+		return (numerator / denominator) < 0.08;
 	}
 
 	/**

@@ -16,32 +16,67 @@ class ConvolutionalTest {
 	@Test
 	void padTest() {
 		Convolutional convolutional = new Convolutional.Builder().filterAmount(1).activationType(ActivationType.RELU).filterSize(3)
-				.initializer(new HeInitialization()).pad(2).stride(2).updaterType(UpdaterType.ADAM).build();
+			.initializer(new HeInitialization()).pad(3).stride(2).updaterType(UpdaterType.ADAM).build();
 		convolutional.setDimensions(2, 2, 2);
-		float[][] input = new float[][]{{
+		float[][] input = new float[][]{
+			{
 				1, 2,
 				2, 1,
 
 				3, 3,
-				1, 3}
+				1, 3
+			},
+			{
+				1, 2,
+				2, 1,
+
+				3, 3,
+				1, 3
+			}
 		};
 
-		float[] target = new float[]{
-				0, 0, 0, 0, 0, 0,
-				0, 0, 0, 0, 0, 0,
-				0, 0, 1, 2, 0, 0,
-				0, 0, 2, 1, 0, 0,
-				0, 0, 0, 0, 0, 0,
-				0, 0, 0, 0, 0, 0,
+		float[][] target = new float[][]{
+			{
+				0, 0, 0, 0, 0, 0, 0, 0,
+				0, 0, 0, 0, 0, 0, 0, 0,
+				0, 0, 0, 0, 0, 0, 0, 0,
+				0, 0, 0, 1, 2, 0, 0, 0,
+				0, 0, 0, 2, 1, 0, 0, 0,
+				0, 0, 0, 0, 0, 0, 0, 0,
+				0, 0, 0, 0, 0, 0, 0, 0,
+				0, 0, 0, 0, 0, 0, 0, 0,
 
-				0, 0, 0, 0, 0, 0,
-				0, 0, 0, 0, 0, 0,
-				0, 0, 3, 3, 0, 0,
-				0, 0, 1, 3, 0, 0,
-				0, 0, 0, 0, 0, 0,
-				0, 0, 0, 0, 0, 0,};
+				0, 0, 0, 0, 0, 0, 0, 0,
+				0, 0, 0, 0, 0, 0, 0, 0,
+				0, 0, 0, 0, 0, 0, 0, 0,
+				0, 0, 0, 3, 3, 0, 0, 0,
+				0, 0, 0, 1, 3, 0, 0, 0,
+				0, 0, 0, 0, 0, 0, 0, 0,
+				0, 0, 0, 0, 0, 0, 0, 0,
+				0, 0, 0, 0, 0, 0, 0, 0,
+			},
+			{
+				0, 0, 0, 0, 0, 0, 0, 0,
+				0, 0, 0, 0, 0, 0, 0, 0,
+				0, 0, 0, 0, 0, 0, 0, 0,
+				0, 0, 0, 1, 2, 0, 0, 0,
+				0, 0, 0, 2, 1, 0, 0, 0,
+				0, 0, 0, 0, 0, 0, 0, 0,
+				0, 0, 0, 0, 0, 0, 0, 0,
+				0, 0, 0, 0, 0, 0, 0, 0,
 
-		assertArrayEquals(target, convolutional.pad(input)[0]);
+				0, 0, 0, 0, 0, 0, 0, 0,
+				0, 0, 0, 0, 0, 0, 0, 0,
+				0, 0, 0, 0, 0, 0, 0, 0,
+				0, 0, 0, 3, 3, 0, 0, 0,
+				0, 0, 0, 1, 3, 0, 0, 0,
+				0, 0, 0, 0, 0, 0, 0, 0,
+				0, 0, 0, 0, 0, 0, 0, 0,
+				0, 0, 0, 0, 0, 0, 0, 0,
+			}
+		};
+
+		assertArrayEquals(target, convolutional.pad(input));
 	}
 
 	@Test
