@@ -74,7 +74,7 @@ public class GRU implements Layer {
 			updaters[position++] = updaterType.create(dis);
 		}
 
-		for (int i = 0; i < hiddenSize * inputSize; i++) {
+		for (int i = 0; i < hiddenSize; i++) {
 			bz[i] = dis.readFloat();
 			updaters[position++] = updaterType.create(dis);
 			br[i] = dis.readFloat();
@@ -283,15 +283,15 @@ public class GRU implements Layer {
 		int position = 0;
 
 		for (int i = 0; i < hiddenSize * inputSize + hiddenSize * hiddenSize; i++) {
-			wz[i] += updaters[position++].update(dWz[i] / xh.length);
-			wr[i] += updaters[position++].update(dWr[i] / xh.length);
-			w[i] += updaters[position++].update(dW[i] / xh.length);
+			wz[i] += Math.max(updaters[position++].update(dWz[i] / xh.length), 1);
+			wr[i] += Math.max(updaters[position++].update(dWr[i] / xh.length), 1);
+			w[i] += Math.max(updaters[position++].update(dW[i] / xh.length), 1);
 		}
 
 		for (int i = 0; i < hiddenSize; i++) {
-			bz[i] += updaters[position++].update(dBz[i] / xh.length);
-			br[i] += updaters[position++].update(dBr[i] / xh.length);
-			b[i] += updaters[position++].update(dB[i] / xh.length);
+			bz[i] += Math.max(updaters[position++].update(dBz[i] / xh.length), 1);
+			br[i] += Math.max(updaters[position++].update(dBr[i] / xh.length), 1);
+			b[i] += Math.max(updaters[position++].update(dB[i] / xh.length), 1);
 		}
 	}
 

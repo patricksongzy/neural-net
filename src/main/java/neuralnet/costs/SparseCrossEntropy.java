@@ -26,8 +26,10 @@ public class SparseCrossEntropy implements Cost {
 
 		if (activation.getType() == ActivationType.SOFTMAX) {
 			IntStream.range(0, output.length).parallel().forEach(b -> {
+				int i = (int) target[b][0];
+
 				System.arraycopy(output[b], 0, delta, b * output[0].length, output[0].length);
-				delta[(int) target[b][0] + output[0].length * b] -= 1;
+				delta[i + output[0].length * b] -= 1;
 			});
 		} else {
 			IntStream.range(0, output.length).parallel().forEach(b -> {

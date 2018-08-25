@@ -54,6 +54,7 @@ public class GPU {
 		commandQueue = clCreateCommandQueueWithProperties(context, device, new cl_queue_properties(), null);
 
 		Runtime.getRuntime().addShutdownHook(new Thread(() -> {
+			clFinish(commandQueue);
 			clReleaseCommandQueue(commandQueue);
 			clReleaseContext(context);
 		}));

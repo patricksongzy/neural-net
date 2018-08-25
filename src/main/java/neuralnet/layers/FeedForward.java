@@ -121,11 +121,16 @@ public class FeedForward implements Layer {
 		input = flatten(x);
 		output = new float[x.length][outputSize];
 
-		float[] flattened = GPU.sgemm(CLBlastTranspose.CLBlastTransposeNo, CLBlastTranspose.CLBlastTransposeYes, x.length,
-			outputSize, inputSize, input, inputSize, weights, inputSize, biases, outputSize);
+		float[] flattened = new float[x.length * outputSize];
+		for (int b = 0; b < x.length; b++)
+			System.arraycopy(biases, 0, flattened, b * outputSize, outputSize);
+
+		flattened = GPU.sgemm(CLBlastTranspose.CLBlastTransposeNo, CLBlastTranspose.CLBlastTransposeYes, x.length,
+			outputSize, inputSize, input, inputSize, weights, inputSize, flattened, outputSize);
 
 		if (mode == Mode.EVAL && temperature != 1)
-			IntStream.range(0, flattened.length).parallel().forEach(i -> flattened[i] /= temperature);
+			for (int i = 0; i < flattened.length; i++)
+				flattened[i] /= temperature;
 
 		output = unflatten(flattened, x.length);
 
@@ -199,8 +204,8 @@ public class FeedForward implements Layer {
 	private void getGradient(float[] delta) {
 		gradient = new float[outputSize * inputSize];
 
-		gradient = GPU.sgemm(CLBlastTranspose.CLBlastTransposeNo, CLBlastTranspose.CLBlastTransposeNo, outputSize,
-			inputSize, output.length, delta, output.length, input, inputSize, gradient, inputSize);
+		gradient = GPU.sgemm(CLBlastTranspose.CLBlastTransposeYes, CLBlastTranspose.CLBlastTransposeNo, outputSize,
+			inputSize, output.length, delta, outputSize, input, inputSize, gradient, inputSize);
 
 		if (mode != Mode.GRADIENT_CHECK) {
 			// updating parameters
