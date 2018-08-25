@@ -10,7 +10,7 @@ import java.util.stream.IntStream;
  */
 public class SparseCrossEntropy implements Cost {
 	public CostType getType() {
-		return CostType.CROSS_ENTROPY;
+		return CostType.SPARSE_CROSS_ENTROPY;
 	}
 
 	public float cost(float[] out, float[] target) {

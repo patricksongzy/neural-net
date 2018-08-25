@@ -135,11 +135,11 @@ public class GRU implements Layer {
 		exportParameters(position, hiddenSize, bz, br, b, dos);
 	}
 
-	private int exportParameters(int position, int length, float[] pz, float[] pr, float[] p, DataOutputStream dos) throws IOException {
+	private int exportParameters(int position, int length, float[] z, float[] r, float[] p, DataOutputStream dos) throws IOException {
 		for (int i = 0; i < length; i++) {
-			dos.writeFloat(pz[i]);
+			dos.writeFloat(z[i]);
 			updaters[position++].export(dos);
-			dos.writeFloat(pr[i]);
+			dos.writeFloat(r[i]);
 			updaters[position++].export(dos);
 			dos.writeFloat(p[i]);
 			updaters[position++].export(dos);
@@ -283,15 +283,15 @@ public class GRU implements Layer {
 		int position = 0;
 
 		for (int i = 0; i < hiddenSize * inputSize + hiddenSize * hiddenSize; i++) {
-			wz[i] += Math.max(updaters[position++].update(dWz[i] / xh.length), 1);
-			wr[i] += Math.max(updaters[position++].update(dWr[i] / xh.length), 1);
-			w[i] += Math.max(updaters[position++].update(dW[i] / xh.length), 1);
+			wz[i] += Math.max(Math.min(updaters[position++].update(dWz[i] / xh.length), -1), 1);
+			wr[i] += Math.max(Math.min(updaters[position++].update(dWr[i] / xh.length), -1), 1);
+			w[i] += Math.max(Math.min(updaters[position++].update(dW[i] / xh.length), -1), 1);
 		}
 
 		for (int i = 0; i < hiddenSize; i++) {
-			bz[i] += Math.max(updaters[position++].update(dBz[i] / xh.length), 1);
-			br[i] += Math.max(updaters[position++].update(dBr[i] / xh.length), 1);
-			b[i] += Math.max(updaters[position++].update(dB[i] / xh.length), 1);
+			bz[i] += Math.max(Math.min(updaters[position++].update(dBz[i] / xh.length), -1), 1);
+			br[i] += Math.max(Math.min(updaters[position++].update(dBr[i] / xh.length), -1), 1);
+			b[i] += Math.max(Math.min(updaters[position++].update(dB[i] / xh.length), -1), 1);
 		}
 	}
 

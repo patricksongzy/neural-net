@@ -1,6 +1,8 @@
 package neuralnet.layers;
 
 import neuralnet.Model;
+import neuralnet.activations.ActivationType;
+import neuralnet.costs.CostType;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
@@ -25,7 +27,11 @@ class FeedForwardTest {
 	@Test
 	void gradientTest() {
 		// just a regular test
-		Model model = new Model("src/test/resources/ff-import-test.model");
+		Model model = new Model.Builder().add(new FeedForward.Builder().outputSize(5).activationType(ActivationType.TANH).build())
+			.add(new FeedForward.Builder().outputSize(5).activationType(ActivationType.SOFTMAX).build()).inputDimensions(2)
+			.cost(CostType.CROSS_ENTROPY).build();
+		model.export("src/test/resources/ff-import-test.model");
+		model = new Model("src/test/resources/ff-import-test.model");
 
 		assertTrue(model.gradientCheck(new float[][]{{0.2f, 0.8f}, {0.3f, 0.7f}}, new float[][]{{0.3f, 0.1f, 0.3f, 0.2f, 0.1f},
 			{0.3f, 0.1f, 0.3f, 0.2f, 0.1f}}));

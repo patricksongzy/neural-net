@@ -7,7 +7,7 @@ import java.util.stream.IntStream;
 
 public class MeanSquareError implements Cost {
 	public CostType getType() {
-		return CostType.CROSS_ENTROPY;
+		return CostType.MEAN_SQUARE_ERROR;
 	}
 
 	public float cost(float[] out, float[] target) {
