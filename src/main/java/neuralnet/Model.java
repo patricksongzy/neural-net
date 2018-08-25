@@ -76,7 +76,7 @@ public class Model {
 	 * @param target the target
 	 */
 	private void backward(float[][] target) {
-		float[][] delta = layers[layers.length - 1].backward(cost, target);
+		float[] delta = layers[layers.length - 1].backward(cost, target);
 
 		for (int i = layers.length - 2; i >= 0; i--)
 			delta = layers[i].backward(delta);

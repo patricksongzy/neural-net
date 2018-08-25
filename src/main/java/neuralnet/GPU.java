@@ -6,6 +6,7 @@ import org.jocl.blast.CLBlastLayout;
 
 import static org.jocl.CL.*;
 import static org.jocl.blast.CLBlast.CLBlastSgemm;
+import static org.jocl.blast.CLBlast.CLBlastSger;
 
 public class GPU {
 	private static cl_context context;
@@ -156,7 +157,7 @@ public class GPU {
 			* Sizeof.cl_float, Pointer.to(a), 0, null, null);
 
 		cl_event event = new cl_event();
-		CLBlast.CLBlastSger(CLBlastLayout.CLBlastLayoutRowMajor, m, n, 1, aBuffer, 0, 1, bBuffer, 0, 1,
+		CLBlastSger(CLBlastLayout.CLBlastLayoutRowMajor, m, n, 1, aBuffer, 0, 1, bBuffer, 0, 1,
 			cBuffer, 0, lda, commandQueue, event);
 
 		// Copy the result data back to the host

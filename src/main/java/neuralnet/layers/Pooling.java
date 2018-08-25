@@ -92,14 +92,14 @@ public class Pooling implements Layer {
 		return output;
 	}
 
-	public float[][] backward(Cost cost, float[][] target) {
-		float[][] delta = cost.derivative(output, target, new Identity());
+	public float[] backward(Cost cost, float[][] target) {
+		float[] delta = cost.derivative(output, target, new Identity());
 
 		return backward(delta);
 	}
 
-	public float[][] backward(float[][] previousDelta) {
-		float[][] upsampled = new float[output.length][filterAmount * inputHeight * inputWidth];
+	public float[] backward(float[] previousDelta) {
+		float[] upsampled = new float[output.length * filterAmount * inputHeight * inputWidth];
 
 		IntStream.range(0, output.length).parallel().forEach(b -> {
 			for (int f = 0; f < filterAmount; f++) {
@@ -107,16 +107,16 @@ public class Pooling implements Layer {
 					for (int j = 0; j < downsampleWidth; j++) {
 						int h = i * downsampleStride;
 						int w = j * downsampleStride;
-						int downsampleIndex = j + downsampleWidth * (i + downsampleHeight * f);
+						int downsampleIndex = j + downsampleWidth * (i + downsampleHeight * (f + filterAmount * b));
 
 						for (int m = 0; m < downsampleSize; m++) {
 							for (int n = 0; n < downsampleSize; n++) {
-								int upsampledIndex = (w + n) + inputWidth * ((h + m) + inputHeight * f);
-
 								// changing the dimensions of the delta, and filling the areas that had the max values with the delta
-								// values
+								int upsampledIndex = w + n + inputWidth * h + inputWidth * m + inputWidth * inputHeight * f;
+
 								if (switches[b][upsampledIndex] == 1) {
-									upsampled[b][upsampledIndex] = previousDelta[b][downsampleIndex];
+									upsampled[upsampledIndex + inputWidth * inputHeight * filterAmount * b]
+										= previousDelta[downsampleIndex];
 								}
 							}
 						}

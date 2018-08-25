@@ -36,7 +36,7 @@ public class Dropout implements Layer {
 		this.mode = mode;
 	}
 
-	public float[][] backward(Cost cost, float[][] target) {
+	public float[] backward(Cost cost, float[][] target) {
 		return cost.derivative(output, target, new Identity());
 	}
 
@@ -44,7 +44,7 @@ public class Dropout implements Layer {
 		return LayerType.DROPOUT;
 	}
 
-	public float[][] backward(float[][] previousDelta) {
+	public float[] backward(float[] previousDelta) {
 		return previousDelta;
 	}
 

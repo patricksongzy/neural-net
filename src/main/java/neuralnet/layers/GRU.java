@@ -41,8 +41,6 @@ public class GRU implements Layer {
 		this.updaterType = updaterType;
 		this.initializer = initializer;
 
-		h = new float[hiddenSize];
-
 		bz = new float[hiddenSize];
 		br = new float[hiddenSize];
 		b = new float[hiddenSize];
@@ -151,12 +149,12 @@ public class GRU implements Layer {
 	}
 
 	public void setMode(Mode mode) {
+		h = new float[hiddenSize];
+
 		if (mode == Mode.GRADIENT_CHECK) {
 			for (int i = 0; i < h.length; i++) {
 				h[i] = ThreadLocalRandom.current().nextFloat();
 			}
-		} else {
-			h = new float[hiddenSize];
 		}
 
 		this.mode = mode;
@@ -173,9 +171,6 @@ public class GRU implements Layer {
 		z = new float[x.length][hiddenSize];
 		r = new float[x.length][hiddenSize];
 		y = new float[x.length][hiddenSize];
-
-		if (mode == Mode.GRADIENT_CHECK)
-			System.arraycopy(xh[0], 0, h, 0, hiddenSize);
 
 		for (int t = 0; t < x.length; t++) {
 			System.arraycopy(x[t], 0, xh[t], 0, inputSize);
@@ -205,17 +200,20 @@ public class GRU implements Layer {
 			System.arraycopy(h, 0, y[t], 0, hiddenSize);
 		}
 
+		if (mode == Mode.GRADIENT_CHECK)
+			System.arraycopy(xh[0], inputSize, h, 0, hiddenSize);
+
 		return y;
 	}
 
-	public float[][] backward(Cost cost, float[][] target) {
-		float[][] dy = cost.derivative(y, target, new Identity());
+	public float[] backward(Cost cost, float[][] target) {
+		float[] dy = cost.derivative(y, target, new Identity());
 
 		return backward(dy);
 	}
 
-	public float[][] backward(float[][] previousDelta) {
-		float[][] dx = new float[xh.length][inputSize];
+	public float[] backward(float[] previousDelta) {
+		float[] dx = new float[xh.length * inputSize];
 
 		dWz = new float[hiddenSize * inputSize + hiddenSize * hiddenSize];
 		dWr = new float[hiddenSize * inputSize + hiddenSize * hiddenSize];
@@ -238,7 +236,7 @@ public class GRU implements Layer {
 
 		for (int t = xh.length - 1; t >= 0; t--) {
 			for (int i = 0; i < hiddenSize; i++) {
-				dh[i] += previousDelta[t][i];
+				dh[i] += previousDelta[i + hiddenSize * t];
 				dhc[i] = dh[i] * (1 - z[t][i]) * derivative[t][i];
 			}
 
@@ -257,7 +255,7 @@ public class GRU implements Layer {
 			delta = GPU.sgemm(CLBlastTranspose.CLBlastTransposeNo, CLBlastTranspose.CLBlastTransposeNo, 1, hiddenSize + inputSize,
 				hiddenSize, dr, hiddenSize, wr, hiddenSize + inputSize, delta, hiddenSize + inputSize);
 
-			System.arraycopy(delta, 0, dx[t], 0, inputSize);
+			System.arraycopy(delta, 0, dx, inputSize * t, inputSize);
 			System.arraycopy(delta, inputSize, dh, 0, hiddenSize);
 
 			dWr = GPU.sger(hiddenSize, inputSize + hiddenSize, dr, xh[t], dWr, inputSize + hiddenSize);
@@ -271,7 +269,7 @@ public class GRU implements Layer {
 			});
 		}
 
-		if (mode == Mode.TRAIN)
+		if (mode != Mode.GRADIENT_CHECK)
 			update();
 
 		return dx;

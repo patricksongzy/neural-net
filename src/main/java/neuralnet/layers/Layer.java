@@ -48,7 +48,7 @@ public interface Layer {
 	 * @param target the target output
 	 * @return the delta
 	 */
-	float[][] backward(Cost cost, float[][] target);
+	float[] backward(Cost cost, float[][] target);
 
 	/**
 	 * Back propagation of a hidden layer, given the layer that was back propagated before.
@@ -56,7 +56,7 @@ public interface Layer {
 	 * @param previousDelta the previous delta
 	 * @return the delta
 	 */
-	float[][] backward(float[][] previousDelta);
+	float[] backward(float[] previousDelta);
 
 	/**
 	 * Gets the output dimensions, for initializing following layers.

@@ -19,17 +19,17 @@ public class CrossEntropy implements Cost {
 		return -cost;
 	}
 
-	public float[][] derivative(float[][] output, float[][] target, Activation activation) {
-		float[][] delta = new float[output.length][output[0].length];
+	public float[] derivative(float[][] output, float[][] target, Activation activation) {
+		float[] delta = new float[output.length * output[0].length];
 
 		float[][] derivative = activation.derivative(output);
 
 		IntStream.range(0, output.length).parallel().forEach(b -> {
 			for (int i = 0; i < output[0].length; i++) {
 				if (activation.getType() == ActivationType.SOFTMAX)
-					delta[b][i] = (output[b][i] - target[b][i]); // softmax derivative simplifies to this
+					delta[i + output[0].length * b] = (output[b][i] - target[b][i]); // softmax derivative simplifies to this
 				else
-					delta[b][i] = (-target[b][i] / output[b][i]) * derivative[b][i];
+					delta[i + output[0].length * b] = (-target[b][i] / output[b][i]) * derivative[b][i];
 			}
 		});
 

@@ -223,25 +223,25 @@ public class Convolutional implements Layer {
 		return output;
 	}
 
-	public float[][] backward(Cost cost, float[][] target) {
+	public float[] backward(Cost cost, float[][] target) {
 		// back propagation on the Convolutional layers are calculated a layer ahead
-		float[][] previousDelta = cost.derivative(output, target, activation);
+		float[] previousDelta = cost.derivative(output, target, activation);
 
 		return backward(previousDelta);
 	}
 
-	public float[][] backward(float[][] previousDelta) {
+	public float[] backward(float[] previousDelta) {
 		// back propagation on the Convolutional layers are calculated a layer ahead
-		float[][] delta = new float[output.length][depth * padHeight * padWidth];
+		float[] delta = new float[output.length * depth * padHeight * padWidth];
 		biasGradient = new float[filterAmount];
 
 		// derivative
 		output = activation.derivative(output);
 
 		// since deltas are calculated a layer ahead
-		for (int b = 0; b < previousDelta.length; b++) {
+		for (int b = 0; b < output.length; b++) {
 			for (int i = 0; i < output[0].length; i++) {
-				previousDelta[b][i] *= output[b][i];
+				previousDelta[i + output[0].length * b] *= output[b][i];
 			}
 		}
 
@@ -251,10 +251,10 @@ public class Convolutional implements Layer {
 			for (int f = 0; f < filterAmount; f++) {
 				for (int i = 0, h = 0; i < outputHeight; i++, h += stride) {
 					for (int j = 0, w = 0; j < outputWidth; j++, w += stride) {
-						int index = j + outputWidth * (i + outputHeight * f);
+						int index = j + outputWidth * (i + outputHeight * (f + filterAmount * b));
 
 						// the bias gradient is the delta, since biases are just added to the output
-						float d = previousDelta[b][index];
+						float d = previousDelta[index];
 						biasGradient[f] += d;
 
 						for (int k = 0; k < depth; k++) {
@@ -275,7 +275,7 @@ public class Convolutional implements Layer {
 		});
 
 		// calculating gradient
-		if (mode == Mode.TRAIN) {
+		if (mode != Mode.GRADIENT_CHECK) {
 			// updating parameters
 			update(biasGradient, gradient);
 		}
@@ -287,17 +287,17 @@ public class Convolutional implements Layer {
 					for (int j = 0; j < padWidth; j++) {
 						int h = i * stride;
 						int w = j * stride;
-						int deltaIndex = j + padWidth * (i + padHeight * k);
+						int deltaIndex = j + padWidth * (i + padHeight * (k + depth * b));
 
 						for (int f = 0; f < filterAmount; f++) {
 							for (int m = 0; m < filterSize; m++) {
 								for (int n = 0; n < filterSize; n++) {
 									if ((w - n) < outputWidth && (h - m) < outputHeight && (w - n) >= 0 && (h - m) >= 0) {
 										int upsampledIndex = (w - n) + outputWidth * ((h - m) + outputHeight * f);
-										int filterIndex = n + filterSize * (m + filterSize * (k + depth * f));
+										int filterIndex = n + filterSize * (m + filterSize * (k + depth * (f + filterAmount * b)));
 
 										// same as forward propagation, except the activation derivative is multiplied later
-										delta[b][deltaIndex] += previousDelta[b][upsampledIndex] * filters[filterIndex];
+										delta[deltaIndex] += previousDelta[upsampledIndex] * filters[filterIndex];
 									}
 								}
 							}
