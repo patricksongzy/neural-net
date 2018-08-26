@@ -179,14 +179,13 @@ public class Model {
 	 * TODO: Execute multiple examples in parallel
 	 *
 	 * @param data      a map of the inputs and the <b>sparse-encoded</b> targets
-	 * @param timeSteps the time step amount
 	 * @param batchSize the amount of examples to be executed in parallel
 	 * @param bpttSize  the amount of timesteps to be executed before update
 	 * @param epochs    the epochs
 	 * @param interval  the interval to export
 	 * @param name      the name to export to
 	 */
-	public void trainRecurrent(Map<float[][], Float> data, int timeSteps, int batchSize, int bpttSize, int epochs, int interval,
+	public void trainRecurrent(Map<float[][], Float> data, int batchSize, int bpttSize, int epochs, int interval,
 							   String name) {
 		Plot plot = new Plot();
 		JFrame frame = new JFrame("Network Cost");
