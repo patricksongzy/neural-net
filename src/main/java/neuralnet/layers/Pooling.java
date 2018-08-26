@@ -14,11 +14,12 @@ import java.util.stream.IntStream;
  * locations.
  */
 public class Pooling implements Layer {
+	private int batchSize;
 	private int inputHeight, inputWidth, filterAmount;
 	private int downsampleHeight, downsampleWidth;
 	private int downsampleSize, downsampleStride;
 
-	private byte[][] switches;
+	private boolean[][] switches;
 	private float[][] output;
 
 	private Pooling(int downsampleSize, int downsampleStride) {
@@ -54,76 +55,89 @@ public class Pooling implements Layer {
 		this.downsampleHeight = (inputHeight - downsampleSize) / downsampleStride + 1;
 	}
 
-	public float[][] forward(float[][] input) {
-		switches = new byte[input.length][filterAmount * inputHeight * inputWidth];
-		output = new float[input.length][filterAmount * downsampleHeight * downsampleWidth];
+	public float[][] forward(float[][] input, int batchSize) {
+		this.batchSize = batchSize;
 
-		IntStream.range(0, input.length).parallel().forEach(b -> {
-			for (int f = 0; f < filterAmount; f++) {
-				for (int i = 0; i < downsampleHeight; i++) {
-					for (int j = 0; j < downsampleWidth; j++) {
-						int h = i * downsampleStride;
-						int w = j * downsampleStride;
+		switches = new boolean[input.length][batchSize * filterAmount * inputHeight * inputWidth];
+		output = new float[input.length][batchSize * filterAmount * downsampleHeight * downsampleWidth];
 
-						int index = 0;
-						float max = Float.NEGATIVE_INFINITY;
+		for (int t = 0; t < input.length; t++) {
+			int time = t;
 
-						for (int m = 0; m < downsampleSize; m++) {
-							for (int n = 0; n < downsampleSize; n++) {
-								int outputIndex = (w + n) + inputWidth * ((h + m) + inputHeight * f);
-								float value = input[b][outputIndex];
+			IntStream.range(0, batchSize).parallel().forEach(b -> {
+				for (int f = 0; f < filterAmount; f++) {
+					for (int i = 0; i < downsampleHeight; i++) {
+						for (int j = 0; j < downsampleWidth; j++) {
+							int h = i * downsampleStride;
+							int w = j * downsampleStride;
 
-								// finding the max value
-								if (value > max) {
-									max = value;
-									index = outputIndex;
+							int index = 0;
+							float max = Float.NEGATIVE_INFINITY;
+
+							for (int m = 0; m < downsampleSize; m++) {
+								for (int n = 0; n < downsampleSize; n++) {
+									int outputIndex = (w + n) + inputWidth * ((h + m) + inputHeight * (f + filterAmount * b));
+									float value = input[time][outputIndex];
+
+									// finding the max value
+									if (value > max) {
+										max = value;
+										index = outputIndex;
+									}
 								}
 							}
-						}
 
-						int downsampleIndex = j + downsampleWidth * (i + downsampleHeight * f);
-						switches[b][index] = 1;
-						output[b][downsampleIndex] = max;
+							int downsampleIndex = j + downsampleWidth * (i + downsampleHeight * (f + filterAmount * b));
+							switches[time][index] = true;
+							output[time][downsampleIndex] = max;
+						}
 					}
 				}
-			}
-		});
+			});
+		}
 
 		return output;
 	}
 
-	public float[] backward(Cost cost, float[][] target) {
-		float[] delta = cost.derivative(output, target, new Identity());
+	public float[][] backward(Cost cost, float[][] target) {
+		float[][] delta = new float[output.length][];
+
+		for (int t = 0; t < output.length; t++)
+			delta[t] = cost.derivative(output[t], target[t], new Identity(), batchSize);
 
 		return backward(delta);
 	}
 
-	public float[] backward(float[] previousDelta) {
-		float[] upsampled = new float[output.length * filterAmount * inputHeight * inputWidth];
+	public float[][] backward(float[][] previousDelta) {
+		float[][] upsampled = new float[output.length][batchSize * filterAmount * inputHeight * inputWidth];
 
-		IntStream.range(0, output.length).parallel().forEach(b -> {
-			for (int f = 0; f < filterAmount; f++) {
-				for (int i = 0; i < downsampleHeight; i++) {
-					for (int j = 0; j < downsampleWidth; j++) {
-						int h = i * downsampleStride;
-						int w = j * downsampleStride;
-						int downsampleIndex = j + downsampleWidth * (i + downsampleHeight * (f + filterAmount * b));
+		for (int t = 0; t < output.length; t++) {
+			int time = t;
 
-						for (int m = 0; m < downsampleSize; m++) {
-							for (int n = 0; n < downsampleSize; n++) {
-								// changing the dimensions of the delta, and filling the areas that had the max values with the delta
-								int upsampledIndex = w + n + inputWidth * h + inputWidth * m + inputWidth * inputHeight * f;
+			IntStream.range(0, batchSize).parallel().forEach(b -> {
+				for (int f = 0; f < filterAmount; f++) {
+					for (int i = 0; i < downsampleHeight; i++) {
+						for (int j = 0; j < downsampleWidth; j++) {
+							int h = i * downsampleStride;
+							int w = j * downsampleStride;
+							int downsampleIndex = j + downsampleWidth * (i + downsampleHeight * (f + filterAmount * b));
 
-								if (switches[b][upsampledIndex] == 1) {
-									upsampled[upsampledIndex + inputWidth * inputHeight * filterAmount * b]
-										= previousDelta[downsampleIndex];
+							for (int m = 0; m < downsampleSize; m++) {
+								for (int n = 0; n < downsampleSize; n++) {
+									// changing the dimensions of the delta, and filling the areas that had the max values with the delta
+									int upsampledIndex = (w + n) + inputWidth * ((h + m) + inputHeight * (f + filterAmount * b));
+
+									if (switches[time][upsampledIndex]) {
+										upsampled[time][upsampledIndex + inputWidth * inputHeight * filterAmount * b]
+											= previousDelta[time][downsampleIndex];
+									}
 								}
 							}
 						}
 					}
 				}
-			}
-		});
+			});
+		}
 
 		return upsampled;
 	}

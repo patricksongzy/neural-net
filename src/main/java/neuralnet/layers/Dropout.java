@@ -15,6 +15,7 @@ import java.util.stream.IntStream;
 public class Dropout implements Layer {
 	private Mode mode = Mode.TRAIN;
 
+	private int batchSize;
 	private int inputSize;
 	private float dropout;
 	private float[][] output;
@@ -36,15 +37,21 @@ public class Dropout implements Layer {
 		this.mode = mode;
 	}
 
-	public float[] backward(Cost cost, float[][] target) {
-		return cost.derivative(output, target, new Identity());
+	public float[][] backward(Cost cost, float[][] target) {
+		float[][] delta = new float[target.length][];
+
+		for (int t = 0; t < output.length; t++) {
+			delta[t] = cost.derivative(output[t], target[t], new Identity(), batchSize);
+		}
+
+		return delta;
 	}
 
 	public LayerType getType() {
 		return LayerType.DROPOUT;
 	}
 
-	public float[] backward(float[] previousDelta) {
+	public float[][] backward(float[][] previousDelta) {
 		return previousDelta;
 	}
 
@@ -56,25 +63,32 @@ public class Dropout implements Layer {
 		return new float[0][][];
 	}
 
-	public float[][] forward(float[][] x) {
-		if (mode == Mode.TRAIN) {
-			output = new float[x.length][x[0].length];
+	public float[][] forward(float[][] input, int batchSize) {
+		this.batchSize = batchSize;
 
-			IntStream.range(0, x.length).parallel().forEach(b -> {
-				for (int i = 0; i < x[0].length; i++) {
-					// if a random float is past the dropout threshold, then drop the connection by setting the output to zero
-					if (ThreadLocalRandom.current().nextFloat() < dropout)
-						output[b][i] = 0;
-					else
-						output[b][i] = x[b][i] / dropout;
-				}
-			});
+		if (mode == Mode.TRAIN) {
+			output = new float[input.length][inputSize];
+
+			int size = input.length / batchSize;
+			for (int t = 0; t < input.length; t++) {
+				int time = t;
+
+				IntStream.range(0, batchSize).parallel().forEach(b -> {
+					for (int i = 0; i < size; i++) {
+						// if a random float is past the dropout threshold, then drop the connection by setting the output to zero
+						if (ThreadLocalRandom.current().nextFloat() < dropout)
+							output[time][i] = 0;
+						else
+							output[time][i + size * b] = input[time][i + size * b] / dropout;
+					}
+				});
+			}
 
 			return output;
 		}
 
 		// during evaluation, dropout does not take effect
-		return x;
+		return input;
 	}
 
 	public void export(DataOutputStream dos) throws IOException {

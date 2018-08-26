@@ -20,23 +20,22 @@ public class SparseCrossEntropy implements Cost {
 		return (float) -Math.log(out[(int) target[0]] + 1e-16);
 	}
 
-	public float[] derivative(float[][] output, float[][] target, Activation activation) {
-		float[] delta = new float[output.length * output[0].length];
-		float[][] derivative = activation.derivative(output);
+	public float[] derivative(float[] output, float[] target, Activation activation, int batchSize) {
+		float[] delta = new float[output.length];
 
-		if (activation.getType() == ActivationType.SOFTMAX) {
-			IntStream.range(0, output.length).parallel().forEach(b -> {
-				int i = (int) target[b][0];
+		float[] derivative = activation.derivative(output);
 
-				System.arraycopy(output[b], 0, delta, b * output[0].length, output[0].length);
-				delta[i + output[0].length * b] -= 1;
-			});
-		} else {
-			IntStream.range(0, output.length).parallel().forEach(b -> {
-				int i = (int) target[b][0];
-				delta[i + output[0].length * b] = (-1 / output[b][i]) * derivative[b][i];
-			});
-		}
+		int size = output.length / batchSize;
+		IntStream.range(0, batchSize).parallel().forEach(b -> {
+			int index = (int) target[b] + size * b;
+
+			if (activation.getType() == ActivationType.SOFTMAX) {
+				System.arraycopy(output, size * b, delta, size * b, size);
+				delta[index] -= 1;
+			} else {
+				delta[index] = (-1 / output[index]) * derivative[index];
+			}
+		});
 
 		return delta;
 	}

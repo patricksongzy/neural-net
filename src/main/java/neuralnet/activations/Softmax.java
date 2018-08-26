@@ -1,6 +1,5 @@
 package neuralnet.activations;
 
-import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.IntStream;
 
 /**
@@ -11,52 +10,39 @@ public class Softmax implements Activation {
 		return ActivationType.SOFTMAX;
 	}
 
-	public void activation(float[] x) {
-		float top = Float.NEGATIVE_INFINITY;
-		AtomicReference<Float> sum = new AtomicReference<>((float) 0);
+	public void activation(float[] x, int batchSize) {
+		// TODO: rewrite
 
-		for (float value : x) {
-			if (value > top) {
-				top = value;
-			}
-		}
+		float[] sum = new float[batchSize];
+		float[] max = new float[batchSize];
 
-		final float max = top;
-		IntStream.range(0, x.length).parallel().forEach(i -> {
-			float value = (float) Math.exp(x[i] - max);
-
-			sum.updateAndGet(v -> v + value);
-			x[i] = value;
-		});
-
-		for (int i = 0; i < x.length; i++)
-			x[i] /= sum.get();
-	}
-
-	public void activation(float[][] x) {
-		float[] sum = new float[x.length];
-		float[] max = new float[x.length];
-
-		IntStream.range(0, x.length).parallel().forEach(b -> {
+		int size = x.length / batchSize;
+		IntStream.range(0, batchSize).parallel().forEach(b -> {
 			max[b] = Float.NEGATIVE_INFINITY;
 
-			for (int i = 0; i < x[0].length; i++)
-				if (x[b][i] > max[b])
-					max[b] = x[b][i];
+			for (int i = 0; i < size; i++) {
+				int index = i + size * b;
 
-			for (int i = 0; i < x[0].length; i++) {
-				float value = (float) Math.exp(x[b][i] - max[b]);
-
-				sum[b] += value;
-				x[b][i] = value;
+				if (x[index] > max[b])
+					max[b] = x[index];
 			}
 
-			for (int i = 0; i < x[0].length; i++)
-				x[b][i] /= sum[b];
+			for (int i = 0; i < size; i++) {
+				int index = i + size * b;
+
+				float value = (float) Math.exp(x[index] - max[b]);
+
+				sum[b] += value;
+				x[index] = value;
+			}
+
+			for (int i = 0; i < size; i++) {
+				x[i + size * b] /= sum[b];
+			}
 		});
 	}
 
-	public float[][] derivative(float[][] x) {
+	public float[] derivative(float[] x) {
 		return x;
 	}
 }

@@ -23,6 +23,7 @@ import java.util.stream.IntStream;
 public class FeedForward implements Layer {
 	private Mode mode = Mode.TRAIN;
 
+	private int batchSize;
 	private int inputSize, outputSize;
 	private float temperature;
 	private Initializer initializer;
@@ -32,8 +33,7 @@ public class FeedForward implements Layer {
 	private Updater[] biasUpdaters;
 	private float[] weights, biases;
 	private float[] gradient, biasGradient;
-	private float[] input;
-	private float[][] output;
+	private float[][] input, output;
 
 	/**
 	 * Initializes a FeedForward layer neural network from a file.
@@ -66,8 +66,8 @@ public class FeedForward implements Layer {
 		}
 	}
 
-	private FeedForward(int outputSize, float temperature, Initializer initializer, UpdaterType updaterType,
-						ActivationType activationType) {
+	private FeedForward(int outputSize, float temperature, Initializer initializer,
+						UpdaterType updaterType, ActivationType activationType) {
 		this.outputSize = outputSize;
 
 		this.temperature = temperature;
@@ -117,100 +117,76 @@ public class FeedForward implements Layer {
 		return new float[][][]{{weights, gradient}, {biases, biasGradient}};
 	}
 
-	public float[][] forward(float[][] x) {
-		input = flatten(x);
-		output = new float[x.length][outputSize];
+	public float[][] forward(float[][] input, int batchSize) {
+		this.batchSize = batchSize;
 
-		float[] flattened = new float[x.length * outputSize];
-		for (int b = 0; b < x.length; b++)
-			System.arraycopy(biases, 0, flattened, b * outputSize, outputSize);
+		this.input = input;
+		output = new float[input.length][batchSize * outputSize];
 
-		flattened = GPU.sgemm(CLBlastTranspose.CLBlastTransposeNo, CLBlastTranspose.CLBlastTransposeYes, x.length,
-			outputSize, inputSize, input, inputSize, weights, inputSize, flattened, outputSize);
+		for (int t = 0; t < input.length; t++) {
+			for (int b = 0; b < batchSize; b++)
+				System.arraycopy(biases, 0, output[t], b * outputSize, outputSize);
 
-		if (mode == Mode.EVAL && temperature != 1)
-			for (int i = 0; i < flattened.length; i++)
-				flattened[i] /= temperature;
+			output[t] = GPU.sgemm(CLBlastTranspose.CLBlastTransposeNo, CLBlastTranspose.CLBlastTransposeYes, batchSize,
+				outputSize, inputSize, input[t], inputSize, weights, inputSize, output[t], outputSize);
 
-		output = unflatten(flattened, x.length);
+			if (mode == Mode.EVAL && temperature != 1)
+				for (int i = 0; i < batchSize; i++)
+					output[t][i] /= temperature;
 
-		// activating output
-		activation.activation(output);
+			// activating output
+			activation.activation(output[t], batchSize);
+		}
 
 		return output;
 	}
 
-	private float[] flatten(float[][] x) {
-		int size = x[0].length;
-		float[] flat = new float[x.length * size];
+	public float[][] backward(Cost cost, float[][] target) {
+		float[][] previousDelta = new float[output.length][];
 
-		IntStream.range(0, x.length).parallel().forEach(b -> System.arraycopy(x[b], 0, flat, b * size, size));
-
-		return flat;
-	}
-
-	private float[][] unflatten(float[] x, int batchSize) {
-		int size = x.length / batchSize;
-		float[][] unflattened = new float[batchSize][size];
-
-		IntStream.range(0, batchSize).parallel().forEach(b -> System.arraycopy(x, b * size, unflattened[b], 0, size));
-
-		return unflattened;
-	}
-
-	public float[] backward(Cost cost, float[][] target) {
-		float[] previousDelta = cost.derivative(output, target, activation);
-
-		biasGradient = new float[outputSize];
-
-		for (int b = 0; b < output.length; b++) {
-			for (int i = 0; i < outputSize; i++) {
-				biasGradient[i] += previousDelta[i + outputSize * b];
-			}
+		for (int t = 0; t < output.length; t++) {
+			previousDelta[t] = cost.derivative(output[t], target[t], activation, batchSize);
 		}
 
-		getGradient(previousDelta);
-		return getDelta(previousDelta);
+		return backward(previousDelta);
 	}
 
-	public float[] backward(float[] previousDelta) {
-		output = activation.derivative(output);
+	public float[][] backward(float[][] previousDelta) {
 		biasGradient = new float[outputSize];
 
-		for (int b = 0; b < output.length; b++) {
-			for (int i = 0; i < outputSize; i++) {
-				previousDelta[i + outputSize * b] *= output[b][i];
-				biasGradient[i] += previousDelta[i + outputSize * b];
-			}
-		}
-
-		// calculating gradient
-		getGradient(previousDelta);
-		return getDelta(previousDelta);
-	}
-
-	private float[] getDelta(float[] previousDelta) {
-		float[] delta = new float[output.length * inputSize];
-
-		delta = GPU.sgemm(CLBlastTranspose.CLBlastTransposeNo, CLBlastTranspose.CLBlastTransposeNo, output.length,
-			inputSize, outputSize, previousDelta, outputSize, weights, inputSize, delta, inputSize);
-
-		return delta;
-	}
-
-	/**
-	 * Calculates the gradient, then stores it, if on gradient check mode. Else, updates the parameters.
-	 */
-	private void getGradient(float[] delta) {
 		gradient = new float[outputSize * inputSize];
 
-		gradient = GPU.sgemm(CLBlastTranspose.CLBlastTransposeYes, CLBlastTranspose.CLBlastTransposeNo, outputSize,
-			inputSize, output.length, delta, outputSize, input, inputSize, gradient, inputSize);
+		for (int t = 0; t < output.length; t++) {
+			output[t] = activation.derivative(output[t]);
+
+			for (int b = 0; b < batchSize; b++) {
+				for (int i = 0; i < outputSize; i++) {
+					int index = i + outputSize * b;
+
+					if (activation.getType() != ActivationType.SOFTMAX)
+						previousDelta[t][index] *= output[t][index];
+
+					biasGradient[i] += previousDelta[t][index];
+				}
+			}
+
+			gradient = GPU.sgemm(CLBlastTranspose.CLBlastTransposeYes, CLBlastTranspose.CLBlastTransposeNo, outputSize,
+				inputSize, batchSize, previousDelta[t], outputSize, input[t], inputSize, gradient, inputSize);
+		}
 
 		if (mode != Mode.GRADIENT_CHECK) {
 			// updating parameters
 			update(gradient);
 		}
+
+		float[][] delta = new float[output.length][batchSize * inputSize];
+
+		for (int t = 0; t < output.length; t++) {
+			delta[t] = GPU.sgemm(CLBlastTranspose.CLBlastTransposeNo, CLBlastTranspose.CLBlastTransposeNo, batchSize,
+				inputSize, outputSize, previousDelta[t], outputSize, weights, inputSize, delta[t], inputSize);
+		}
+
+		return delta;
 	}
 
 	/**
@@ -220,12 +196,12 @@ public class FeedForward implements Layer {
 	 */
 	private void update(float[] gradient) {
 		IntStream.range(0, outputSize).parallel().forEach(i -> {
-			biases[i] += biasUpdaters[i].update(biasGradient[i] / output.length);
+			biases[i] += biasUpdaters[i].update(biasGradient[i] / batchSize);
 
 			for (int j = 0; j < inputSize; j++) {
 				int k = j + inputSize * i;
 
-				weights[k] += weightUpdaters[k].update(gradient[k] / output.length);
+				weights[k] += weightUpdaters[k].update(gradient[k] / batchSize);
 			}
 		});
 	}

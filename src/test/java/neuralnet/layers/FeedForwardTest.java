@@ -21,7 +21,7 @@ class FeedForwardTest {
 		for (int i = 0; i < feedForward.getParameters()[1][0].length; i++)
 			feedForward.getParameters()[1][0][i] = biases[i];
 
-		assertArrayEquals(new float[]{6, 1, 5, 1, 6}, feedForward.forward(new float[][]{{1, 2}})[0]);
+		assertArrayEquals(new float[][]{{6, 1, 5, 1, 6, 6, 1, 5, 1, 6}}, feedForward.forward(new float[][]{{1, 2, 1, 2}}, 2));
 	}
 
 	@Test
@@ -33,7 +33,7 @@ class FeedForwardTest {
 		model.export("src/test/resources/ff-import-test.model");
 		model = new Model("src/test/resources/ff-import-test.model");
 
-		assertTrue(model.gradientCheck(new float[][]{{0.2f, 0.8f}, {0.3f, 0.7f}}, new float[][]{{0.3f, 0.1f, 0.3f, 0.2f, 0.1f},
-			{0.3f, 0.1f, 0.3f, 0.2f, 0.1f}}));
+		assertTrue(model.gradientCheck(new float[][]{{0.2f, 0.8f, 0.3f, 0.7f}}, new float[][]{{0.3f, 0.1f, 0.3f, 0.2f, 0.1f,
+			0.3f, 0.1f, 0.3f, 0.2f, 0.1f}}, 2));
 	}
 }

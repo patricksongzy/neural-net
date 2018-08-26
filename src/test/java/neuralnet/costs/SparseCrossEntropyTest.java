@@ -18,8 +18,8 @@ class SparseCrossEntropyTest {
 
 	@Test
 	void derivative() {
-		float[] delta = SPARSE_CE.derivative(new float[][]{{0.2f, 0.6f, 0.1f, 0.0f, 0.1f}}, new float[][]{{2}},
-			ActivationType.SIGMOID.create());
+		float[] delta = SPARSE_CE.derivative(new float[]{0.2f, 0.6f, 0.1f, 0.0f, 0.1f}, new float[]{2},
+			ActivationType.SIGMOID.create(), 1);
 
 		assertArrayEquals(new float[]{0, 0, -0.9f, 0, 0}, delta, 1e-8f);
 	}
@@ -27,8 +27,8 @@ class SparseCrossEntropyTest {
 	@Test
 	void derivativeSoftmax() {
 		// this is just a general test
-		float[] delta = SPARSE_CE.derivative(new float[][]{{0.2f, 0.6f, 0.1f, 0.0f, 0.1f}}, new float[][]{{2}},
-			ActivationType.SOFTMAX.create());
+		float[] delta = SPARSE_CE.derivative(new float[]{0.2f, 0.6f, 0.1f, 0.0f, 0.1f}, new float[]{2},
+			ActivationType.SOFTMAX.create(), 1);
 
 		assertArrayEquals(new float[]{0.2f, 0.6f, -0.9f, 0.0f, 0.1f}, delta);
 	}

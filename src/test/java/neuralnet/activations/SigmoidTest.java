@@ -11,7 +11,7 @@ class SigmoidTest {
 	void activation() {
 		float[] input = new float[]{-1000, -2000, -3000};
 
-		SIGMOID.activation(input);
+		SIGMOID.activation(input, 1);
 
 		assertArrayEquals(new float[]{0, 0, 0}, input);
 	}
@@ -19,10 +19,10 @@ class SigmoidTest {
 	@Test
 	void derivative() {
 
-		float[][] input = new float[][]{{0, 0.5f, 1}};
+		float[] input = new float[]{0, 0.5f, 1};
 
 		input = SIGMOID.derivative(input);
 
-		assertArrayEquals(new float[][]{{0, 0.25f, 0}}, input);
+		assertArrayEquals(new float[]{0, 0.25f, 0}, input);
 	}
 }

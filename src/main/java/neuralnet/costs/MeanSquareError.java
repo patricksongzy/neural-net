@@ -16,17 +16,20 @@ public class MeanSquareError implements Cost {
 		return 0.5f * cost;
 	}
 
-	public float[] derivative(float[][] output, float[][] target, Activation activation) {
-		float[] delta = new float[output.length * output[0].length];
+	public float[] derivative(float[] output, float[] target, Activation activation, int batchSize) {
+		float[] delta = new float[output.length];
 
 		if (activation.getType() == ActivationType.SOFTMAX)
 			throw new UnsupportedOperationException();
 
-		float[][] derivative = activation.derivative(output);
+		float[] derivative = activation.derivative(output);
 
-		IntStream.range(0, output.length).parallel().forEach(b -> {
-			for (int i = 0; i < output[0].length; i++) {
-				delta[i + output[0].length * b] = (output[b][i] - target[b][i]) * derivative[b][i];
+		int size = output.length / batchSize;
+		IntStream.range(0, batchSize).parallel().forEach(b -> {
+			for (int i = 0; i < size; i++) {
+				int index = i + size * b;
+
+				delta[index] = (output[index] - target[index]) * derivative[index];
 			}
 		});
 

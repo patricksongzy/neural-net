@@ -7,22 +7,22 @@ import neuralnet.layers.LayerType;
 
 import javax.swing.*;
 import java.io.*;
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 
 /**
  * Models represent neural network models. They forward and back propagate layers.
  */
 @SuppressWarnings("unused")
 public class Model {
+	private int inputSize;
 	private Layer[] layers;
 	private Cost cost;
 
 	private Model(Layer[] layers, CostType costType, int[] inputDimensions) {
 		this.layers = layers;
 		this.cost = costType.create();
+
+		inputSize = (int) Arrays.stream(inputDimensions).parallel().mapToLong(v -> v).sum();
 
 		layers[0].setDimensions(inputDimensions); // setting input dimensions
 
@@ -76,7 +76,7 @@ public class Model {
 	 * @param target the target
 	 */
 	private void backward(float[][] target) {
-		float[] delta = layers[layers.length - 1].backward(cost, target);
+		float[][] delta = layers[layers.length - 1].backward(cost, target);
 
 		for (int i = layers.length - 2; i >= 0; i--)
 			delta = layers[i].backward(delta);
@@ -88,9 +88,9 @@ public class Model {
 	 * @param x the input
 	 * @return the output
 	 */
-	public float[][] forward(float[][] x) {
+	public float[][] forward(float[][] x, int batchSize) {
 		for (Layer layer : layers)
-			x = layer.forward(x);
+			x = layer.forward(x, batchSize);
 
 		return x;
 	}
@@ -133,6 +133,8 @@ public class Model {
 		// noinspection IntegerDivisionInFloatingPointContext
 		plot.init(epochs, keys.size() / batchSize + ((keys.size() % batchSize) > 0 ? 1 : 0));
 
+		int inputSize = keys.get(0).length;
+
 		int x = 0;
 		for (int i = 1; i <= epochs; i++) {
 			// shuffling data prevents the neural network from learning the order of the data
@@ -145,28 +147,23 @@ public class Model {
 				// calculating the batch size
 				int s = (j + batchSize) > keys.size() ? (keys.size() % batchSize) : batchSize;
 
-				float[][] inputs = new float[s][];
-				float[][] targets = new float[s][];
+				float[][] inputs = new float[1][s * inputSize];
+				float[] targets = new float[s * inputSize];
 
 				// creating a batch
-				for (int k = j, b = 0; k < j + s; k++, b++) {
-					float[] input = keys.get(k);
-					inputs[b] = input;
-					targets[b] = data.get(input);
+				for (int b = 0; b < s; b++) {
+					float[] input = keys.get(b + j);
+					System.arraycopy(input, 0, inputs[0], b * inputSize, inputSize);
+					System.arraycopy(data.get(input), 0, targets, b * inputSize, inputSize);
 				}
 
 				// forward propagating the batch
-				float[][] out = forward(inputs);
-
-				// calculating cost
-				for (int b = 0; b < s; b++) {
-					error += cost.cost(out[b], targets[b]);
-				}
+				float[] out = forward(inputs, batchSize)[0];
 
 				// back propagating batch
-				backward(targets);
+				backward(new float[][]{targets});
 
-				plot.update(x++, error / s, i, batch, j);
+				plot.update(x++, cost.cost(out, targets) / s, i, batch, j);
 				if (batch % interval == 0)
 					export(name);
 			}
@@ -179,13 +176,18 @@ public class Model {
 	 * The batch size dictates the amount of training data the network learns, before updating parameters.
 	 * Targets must be encoded sparsely. This method does not support one-hot encoding, for performance reasons.
 	 *
+	 * TODO: Execute multiple examples in parallel
+	 *
 	 * @param data      a map of the inputs and the <b>sparse-encoded</b> targets
-	 * @param batchSize the batch size
+	 * @param timeSteps the time step amount
+	 * @param batchSize the amount of examples to be executed in parallel
+	 * @param bpttSize  the amount of timesteps to be executed before update
 	 * @param epochs    the epochs
 	 * @param interval  the interval to export
 	 * @param name      the name to export to
 	 */
-	public void trainRecurrent(Map<float[][], int[]> data, int batchSize, int epochs, int interval, String name) {
+	public void trainRecurrent(Map<float[][], Float> data, int timeSteps, int batchSize, int bpttSize, int epochs, int interval,
+							   String name) {
 		Plot plot = new Plot();
 		JFrame frame = new JFrame("Network Cost");
 		frame.setSize(1600, 800);
@@ -207,36 +209,44 @@ public class Model {
 			Collections.shuffle(keys);
 
 			// looping through the training set
-			for (int j = 0; j < keys.size(); j++) {
-				float[][] key = keys.get(j);
-				int[] value = data.get(key);
+			for (int j = 0, batch = 1; j < keys.size(); j += batchSize, batch++) {
+				int s = (j + batchSize) > keys.size() ? (keys.size() % batchSize) : batchSize;
 
-				for (int k = 0, batch = 1; k < key.length; k += batchSize, batch++) {
-					float error = 0;
+				float[][] inputs = null, targets = null;
 
-					int s = (k + batchSize) > key.length ? (key.length % batchSize) : batchSize;
+				for (int b = 0; b < s; b++) {
+					float[][] key = keys.get(b + j);
+					float value = data.get(key);
 
-					float[][] inputs = new float[s][];
-					float[][] targets = new float[s][];
+					for (int k = 0, time = 1; k < keys.get(j).length; k += batchSize, time++) {
+						float error = 0;
 
-					for (int t = k, b = 0; t < k + s; t++, b++) {
-						inputs[b] = key[t];
+						int bptt = (k + bpttSize) > inputSize ? (inputSize % bpttSize) : bpttSize;
 
-						targets[b] = new float[]{value[t]};
+						inputs = new float[bptt][s * inputSize];
+						targets = new float[bptt][s * inputSize];
+
+						for (int t = 0; t < bptt; t++) {
+							System.arraycopy(key[t + k], 0, inputs[t], inputSize * b, inputSize);
+							targets[t][inputSize] = value;
+						}
 					}
+				}
 
+				if (inputs != null && targets != null) {
 					// forward propagating the batch
-					float[][] out = forward(inputs);
-
-					// calculating cost
-					for (int b = 0; b < s; b++) {
-						error += cost.cost(out[b], targets[b]);
-					}
+					float[][] out = forward(inputs, batchSize);
 
 					// back propagating batch
 					backward(targets);
 
-					plot.update(x++, error / s, i, 1, j);
+					float error = 0;
+					for (int k = 0; k < out.length; k++)
+						error += cost.cost(out[k], targets[k]);
+
+					plot.update(x++, error / s, i, batch, j);
+					if (batch % interval == 0)
+						export(name);
 				}
 			}
 
@@ -252,16 +262,16 @@ public class Model {
 	 * @param input  the input
 	 * @param target the target
 	 */
-	public boolean gradientCheck(float[][] input, float[][] target) {
+	public boolean gradientCheck(float[][] input, float[][] target, int batchSize) {
 		setMode(Layer.Mode.GRADIENT_CHECK);
 
-		forward(input);
+		forward(input, batchSize);
 		backward(target);
 
 		boolean pass = true;
 		for (Layer layer : layers) {
 			for (float[][] parameters : layer.getParameters()) {
-				if (!checkParameters(parameters[0], parameters[1], input, target)) {
+				if (!checkParameters(parameters[0], parameters[1], input, target, batchSize)) {
 					pass = false;
 					System.err.println("Fail\n\n");
 				}
@@ -273,7 +283,7 @@ public class Model {
 		return pass;
 	}
 
-	private boolean checkParameters(float[] parameters, float[] gradient, float[][] x, float[][] target) {
+	private boolean checkParameters(float[] parameters, float[] gradient, float[][] input, float[][] target, int batchSize) {
 		double epsilon = 1e-2;
 		double numerator = 0, denominator = 0;
 
@@ -282,19 +292,19 @@ public class Model {
 		for (int i = 0; i < parameters.length; i++) {
 			parameters[i] += epsilon;
 
-			float[][] y = forward(x);
+			float[][] y = forward(input, batchSize);
 
 			float plus = 0;
-			for (int t = 0; t < x.length; t++)
-				plus += cost.cost(y[t], target[t]);
+			for (int j = 0; j < y.length; j++)
+				plus += cost.cost(y[j], target[j]);
 
 			parameters[i] -= 2 * epsilon;
 
-			y = forward(x);
+			y = forward(input, batchSize);
 
 			float minus = 0;
-			for (int t = 0; t < x.length; t++)
-				minus += cost.cost(y[t], target[t]);
+			for (int j = 0; j < y.length; j++)
+				minus += cost.cost(y[j], target[j]);
 
 			parameters[i] += epsilon;
 
