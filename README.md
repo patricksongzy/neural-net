@@ -1,5 +1,6 @@
 # neural-net
 A neural network implementation in Java. This implementation passes the current tests that have been implemented.
+Please note: There is currently no versioning system for this project at the moment. Although the pom.xml file displays a version for the project, it is not updated.
 ## Project
 This project includes:
 * Convolutional, Feed-Forward, Down-Sampling/Pooling, Dropout and GRU layers.
