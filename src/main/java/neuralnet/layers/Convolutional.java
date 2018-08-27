@@ -334,14 +334,14 @@ public class Convolutional implements Layer {
 	 */
 	private void update(float[] delta, float[] gradient) {
 		IntStream.range(0, filterAmount).parallel().forEach(f -> {
-			biases[f] += biasUpdaters[f].update(delta[f] / batchSize);
+			biases[f] += biasUpdaters[f].update(delta[f] / (batchSize * output.length));
 
 			for (int k = 0; k < depth; k++) {
 				for (int m = 0; m < filterSize; m++) {
 					for (int n = 0; n < filterSize; n++) {
 						int filterIndex = n + filterSize * (m + filterSize * (k + depth * f));
 
-						filters[filterIndex] += filterUpdaters[filterIndex].update(gradient[filterIndex] / batchSize);
+						filters[filterIndex] += filterUpdaters[filterIndex].update(gradient[filterIndex] / (batchSize * output.length));
 					}
 				}
 			}

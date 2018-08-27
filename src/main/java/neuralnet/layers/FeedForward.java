@@ -119,8 +119,8 @@ public class FeedForward implements Layer {
 
 	public float[][] forward(float[][] input, int batchSize) {
 		this.batchSize = batchSize;
-
 		this.input = input;
+
 		output = new float[input.length][batchSize * outputSize];
 
 		for (int t = 0; t < input.length; t++) {
@@ -130,9 +130,11 @@ public class FeedForward implements Layer {
 			output[t] = GPU.sgemm(CLBlastTranspose.CLBlastTransposeNo, CLBlastTranspose.CLBlastTransposeYes, batchSize,
 				outputSize, inputSize, input[t], inputSize, weights, inputSize, output[t], outputSize);
 
-			if (mode == Mode.EVAL && temperature != 1)
-				for (int i = 0; i < batchSize; i++)
+			if (mode == Mode.EVAL && temperature != 1) {
+				for (int i = 0; i < batchSize; i++) {
 					output[t][i] /= temperature;
+				}
+			}
 
 			// activating output
 			activation.activation(output[t], batchSize);
@@ -196,12 +198,12 @@ public class FeedForward implements Layer {
 	 */
 	private void update(float[] gradient) {
 		IntStream.range(0, outputSize).parallel().forEach(i -> {
-			biases[i] += biasUpdaters[i].update(biasGradient[i] / batchSize);
+			biases[i] += biasUpdaters[i].update(biasGradient[i] / (batchSize * output.length));
 
 			for (int j = 0; j < inputSize; j++) {
 				int k = j + inputSize * i;
 
-				weights[k] += weightUpdaters[k].update(gradient[k] / batchSize);
+				weights[k] += weightUpdaters[k].update(gradient[k] / (batchSize * output.length));
 			}
 		});
 	}

@@ -7,22 +7,22 @@ import neuralnet.layers.LayerType;
 
 import javax.swing.*;
 import java.io.*;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
+import java.util.Map;
 
 /**
  * Models represent neural network models. They forward and back propagate layers.
  */
 @SuppressWarnings("unused")
 public class Model {
-	private int inputSize;
 	private Layer[] layers;
 	private Cost cost;
 
 	private Model(Layer[] layers, CostType costType, int[] inputDimensions) {
 		this.layers = layers;
 		this.cost = costType.create();
-
-		inputSize = (int) Arrays.stream(inputDimensions).parallel().mapToLong(v -> v).sum();
 
 		layers[0].setDimensions(inputDimensions); // setting input dimensions
 
@@ -111,6 +111,8 @@ public class Model {
 	 * the values represent the targets. This works for smaller datasets, but takes lots of memory.
 	 * The batch size dictates the amount of training data the network learns, before updating parameters.
 	 *
+	 * TODO: rewrite
+	 *
 	 * @param data      the map of inputs and targets
 	 * @param batchSize the batch size
 	 * @param epochs    the amount of complete iterations of the training set
@@ -147,18 +149,18 @@ public class Model {
 				// calculating the batch size
 				int s = (j + batchSize) > keys.size() ? (keys.size() % batchSize) : batchSize;
 
-				float[][] inputs = new float[1][s * inputSize];
+				float[] inputs = new float[s * inputSize];
 				float[] targets = new float[s * inputSize];
 
 				// creating a batch
 				for (int b = 0; b < s; b++) {
 					float[] input = keys.get(b + j);
-					System.arraycopy(input, 0, inputs[0], b * inputSize, inputSize);
+					System.arraycopy(input, 0, inputs, b * inputSize, inputSize);
 					System.arraycopy(data.get(input), 0, targets, b * inputSize, inputSize);
 				}
 
 				// forward propagating the batch
-				float[] out = forward(inputs, batchSize)[0];
+				float[] out = forward(new float[][]{inputs}, s)[0];
 
 				// back propagating batch
 				backward(new float[][]{targets});
@@ -185,7 +187,7 @@ public class Model {
 	 * @param interval  the interval to export
 	 * @param name      the name to export to
 	 */
-	public void trainRecurrent(Map<float[][], Float> data, int batchSize, int bpttSize, int epochs, int interval,
+	public void trainRecurrent(Map<float[][], float[]> data, int batchSize, int bpttSize, int epochs, int interval,
 							   String name) {
 		Plot plot = new Plot();
 		JFrame frame = new JFrame("Network Cost");
@@ -215,26 +217,30 @@ public class Model {
 
 				for (int b = 0; b < s; b++) {
 					float[][] key = keys.get(b + j);
-					float value = data.get(key);
+					float[] value = data.get(key);
 
-					for (int k = 0, time = 1; k < keys.get(j).length; k += batchSize, time++) {
+					for (int k = 0, time = 1; k < key.length; k += batchSize, time++) {
 						float error = 0;
 
-						int bptt = (k + bpttSize) > inputSize ? (inputSize % bpttSize) : bpttSize;
+						int bptt = (k + bpttSize) > key.length ? (key.length % bpttSize) : bpttSize;
 
-						inputs = new float[bptt][s * inputSize];
-						targets = new float[bptt][s * inputSize];
+						inputs = new float[bptt][];
+						targets = new float[bptt][];
 
 						for (int t = 0; t < bptt; t++) {
+							int inputSize = key[t + k].length;
+							inputs[t] = new float[s * inputSize];
+							targets[t] = new float[s];
+
 							System.arraycopy(key[t + k], 0, inputs[t], inputSize * b, inputSize);
-							targets[t][inputSize] = value;
+							targets[t][b] = value[t + k];
 						}
 					}
 				}
 
 				if (inputs != null && targets != null) {
 					// forward propagating the batch
-					float[][] out = forward(inputs, batchSize);
+					float[][] out = forward(inputs, s);
 
 					// back propagating batch
 					backward(targets);
@@ -243,7 +249,7 @@ public class Model {
 					for (int k = 0; k < out.length; k++)
 						error += cost.cost(out[k], targets[k]);
 
-					plot.update(x++, error / s, i, batch, j);
+					plot.update(x++, error / (s * out.length), i, batch, j);
 					if (batch % interval == 0)
 						export(name);
 				}

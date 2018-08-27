@@ -67,7 +67,7 @@ public class Dropout implements Layer {
 		this.batchSize = batchSize;
 
 		if (mode == Mode.TRAIN) {
-			output = new float[input.length][inputSize];
+			output = new float[input.length][batchSize * inputSize];
 
 			int size = input.length / batchSize;
 			for (int t = 0; t < input.length; t++) {
@@ -77,7 +77,7 @@ public class Dropout implements Layer {
 					for (int i = 0; i < size; i++) {
 						// if a random float is past the dropout threshold, then drop the connection by setting the output to zero
 						if (ThreadLocalRandom.current().nextFloat() < dropout)
-							output[time][i] = 0;
+							output[time][i + size * b] = 0;
 						else
 							output[time][i + size * b] = input[time][i + size * b] / dropout;
 					}

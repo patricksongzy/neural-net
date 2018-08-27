@@ -14,10 +14,13 @@ public class SparseCrossEntropy implements Cost {
 	}
 
 	public float cost(float[] out, float[] target) {
-		if (target.length > 1 || target[0] > out.length)
-			throw new IllegalArgumentException();
+		int size = out.length / target.length;
 
-		return (float) -Math.log(out[(int) target[0]] + 1e-16);
+		float cost = 0;
+		for (int b = 0; b < target.length; b++)
+			cost += Math.log(out[(int) target[b] + size * b] + 1e-16);
+
+		return -cost;
 	}
 
 	public float[] derivative(float[] output, float[] target, Activation activation, int batchSize) {
