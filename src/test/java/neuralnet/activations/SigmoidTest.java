@@ -5,7 +5,7 @@ import org.junit.jupiter.api.Test;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 
 class SigmoidTest {
-	private final Activation SIGMOID = ActivationType.SIGMOID.create();
+	private final ActivationType SIGMOID = ActivationType.SIGMOID;
 
 	@Test
 	void activation() {

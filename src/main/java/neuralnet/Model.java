@@ -22,7 +22,7 @@ public class Model {
 
 	private Model(Layer[] layers, CostType costType, int[] inputDimensions) {
 		this.layers = layers;
-		this.cost = costType.create();
+		this.cost = costType;
 
 		layers[0].setDimensions(inputDimensions); // setting input dimensions
 
@@ -52,7 +52,7 @@ public class Model {
 				System.out.println("Imported layer " + (i + 1) + " / " + layerAmount + " of type " + layers[i].getType());
 			}
 
-			cost = CostType.fromString(dis).create();
+			cost = CostType.fromString(dis);
 
 			System.out.println("Imported from: " + file);
 		} catch (IOException e) {
@@ -110,8 +110,6 @@ public class Model {
 	 * Trains a neural network given a map of <code>float[]</code> and <code>float[]</code>. The keys represent the training data, while
 	 * the values represent the targets. This works for smaller datasets, but takes lots of memory.
 	 * The batch size dictates the amount of training data the network learns, before updating parameters.
-	 *
-	 * TODO: rewrite
 	 *
 	 * @param data      the map of inputs and targets
 	 * @param batchSize the batch size
@@ -177,8 +175,6 @@ public class Model {
 	 * the values represent the targets. This works for smaller datasets, but takes lots of memory.
 	 * The batch size dictates the amount of training data the network learns, before updating parameters.
 	 * Targets must be encoded sparsely. This method does not support one-hot encoding, for performance reasons.
-	 *
-	 * TODO: Execute multiple examples in parallel
 	 *
 	 * @param data      a map of the inputs and the <b>sparse-encoded</b> targets
 	 * @param batchSize the amount of examples to be executed in parallel

@@ -2,6 +2,7 @@ package neuralnet.layers;
 
 import neuralnet.Model;
 import neuralnet.activations.ActivationType;
+import neuralnet.activations.OutputActivationType;
 import neuralnet.costs.CostType;
 import org.junit.jupiter.api.Test;
 
@@ -27,8 +28,10 @@ class FeedForwardTest {
 	@Test
 	void gradientTest() {
 		// just a regular test
-		Model model = new Model.Builder().add(new FeedForward.Builder().outputSize(5).activationType(ActivationType.TANH).build())
-			.add(new FeedForward.Builder().outputSize(5).activationType(ActivationType.SOFTMAX).build()).inputDimensions(2)
+		Model model = new Model.Builder()
+			.add(new FeedForward.Builder().outputSize(5).activation(ActivationType.SIGMOID).build())
+			.add(new FeedForward.Builder().outputSize(5).activation(OutputActivationType.SOFTMAX).build())
+			.inputDimensions(2)
 			.cost(CostType.CROSS_ENTROPY).build();
 		model.export("src/test/resources/ff-import-test.model");
 		model = new Model("src/test/resources/ff-import-test.model");

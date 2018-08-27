@@ -45,7 +45,7 @@ public class FeedForward implements Layer {
 		outputSize = dis.readInt();
 		temperature = dis.readFloat();
 
-		activation = ActivationType.fromString(dis).create();
+		activation = Activation.fromString(dis);
 		updaterType = UpdaterType.fromString(dis);
 
 		biases = new float[outputSize];
@@ -67,15 +67,19 @@ public class FeedForward implements Layer {
 	}
 
 	private FeedForward(int outputSize, float temperature, Initializer initializer,
-						UpdaterType updaterType, ActivationType activationType) {
+						UpdaterType updaterType, Activation activation) {
+		if (outputSize <= 0)
+			throw new IllegalArgumentException("Output size must be > 0.");
+		if (temperature <= 0)
+			throw new IllegalArgumentException("Temperature must be > 0.");
+		if (initializer == null || updaterType == null || activation == null)
+			throw new IllegalArgumentException("Values cannot be null.");
+
 		this.outputSize = outputSize;
-
 		this.temperature = temperature;
-
 		this.initializer = initializer;
 		this.updaterType = updaterType;
-
-		activation = activationType.create();
+		this.activation = activation;
 	}
 
 	public void setMode(Mode mode) {
@@ -94,7 +98,7 @@ public class FeedForward implements Layer {
 		}
 
 		if (inputSize <= 0)
-			throw new IllegalArgumentException();
+			throw new IllegalArgumentException("Invalid input dimensions.");
 
 		biases = new float[outputSize];
 		biasUpdaters = new Updater[outputSize];
@@ -147,7 +151,10 @@ public class FeedForward implements Layer {
 		float[][] previousDelta = new float[output.length][];
 
 		for (int t = 0; t < output.length; t++) {
-			previousDelta[t] = cost.derivative(output[t], target[t], activation, batchSize);
+			if (activation.getType() == Activation.Type.SOFTMAX)
+				previousDelta[t] = cost.derviativeSoftmax(output[t], target[t], batchSize);
+			else
+				previousDelta[t] = cost.derivative(output[t], target[t], batchSize);
 		}
 
 		return backward(previousDelta);
@@ -165,7 +172,7 @@ public class FeedForward implements Layer {
 				for (int i = 0; i < outputSize; i++) {
 					int index = i + outputSize * b;
 
-					if (activation.getType() != ActivationType.SOFTMAX)
+					if (activation.getType() != Activation.Type.SOFTMAX)
 						previousDelta[t][index] *= output[t][index];
 
 					biasGradient[i] += previousDelta[t][index];
@@ -213,7 +220,7 @@ public class FeedForward implements Layer {
 		dos.writeInt(outputSize);
 		dos.writeFloat(temperature);
 
-		activation.getType().export(dos);
+		activation.export(dos);
 		updaterType.export(dos);
 
 		for (int i = 0; i < outputSize; i++) {
@@ -245,13 +252,13 @@ public class FeedForward implements Layer {
 		private int outputSize;
 		private float temperature;
 		private UpdaterType updaterType;
-		private ActivationType activationType;
+		private Activation activation;
 		private Initializer initializer;
 
 		public Builder() {
 			temperature = 1;
 			updaterType = UpdaterType.ADAM;
-			activationType = ActivationType.RELU;
+			activation = ActivationType.RELU;
 			initializer = new HeInitialization();
 		}
 
@@ -262,6 +269,7 @@ public class FeedForward implements Layer {
 		 */
 		public Builder outputSize(int outputSize) {
 			this.outputSize = outputSize;
+
 			return this;
 		}
 
@@ -271,8 +279,10 @@ public class FeedForward implements Layer {
 		 *
 		 * @param temperature the temperature
 		 */
-		public void setTemperature(float temperature) {
+		public Builder temperature(float temperature) {
 			this.temperature = temperature;
+
+			return this;
 		}
 
 		/**
@@ -281,10 +291,7 @@ public class FeedForward implements Layer {
 		 * @param updaterType the updater
 		 */
 		public Builder updaterType(UpdaterType updaterType) {
-			if (updaterType != null)
-				this.updaterType = updaterType;
-			else
-				throw new IllegalArgumentException();
+			this.updaterType = updaterType;
 
 			return this;
 		}
@@ -292,13 +299,10 @@ public class FeedForward implements Layer {
 		/**
 		 * The activation simulates neurons firing.
 		 *
-		 * @param activationType the activation type
+		 * @param activation the activation type
 		 */
-		public Builder activationType(ActivationType activationType) {
-			if (activationType != null)
-				this.activationType = activationType;
-			else
-				throw new IllegalArgumentException();
+		public Builder activation(Activation activation) {
+			this.activation = activation;
 
 			return this;
 		}
@@ -309,19 +313,13 @@ public class FeedForward implements Layer {
 		 * @param initializer the initializer
 		 */
 		public Builder initializer(Initializer initializer) {
-			if (initializer != null)
-				this.initializer = initializer;
-			else
-				throw new IllegalArgumentException();
+			this.initializer = initializer;
 
 			return this;
 		}
 
 		public FeedForward build() {
-			if (outputSize > 0 && temperature > 0)
-				return new FeedForward(outputSize, temperature, initializer, updaterType, activationType);
-
-			throw new IllegalArgumentException();
+			return new FeedForward(outputSize, temperature, initializer, updaterType, activation);
 		}
 	}
 }

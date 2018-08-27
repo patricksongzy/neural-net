@@ -1,52 +1,83 @@
 package neuralnet.activations;
 
-import java.io.DataInputStream;
-import java.io.DataOutputStream;
-import java.io.IOException;
+import java.util.stream.IntStream;
 
-/**
- * The ActivationType is used for exporting and importing neural networks, and for repeatedly creating instances of an activation.
- */
-public enum ActivationType {
-	RELU, SOFTMAX, IDENTITY, TANH, SIGMOID;
-
-	/**
-	 * Creates an ActivationType, given a String.
-	 *
-	 * @param dis the input stream
-	 * @return the ActivationType
-	 */
-	public static ActivationType fromString(DataInputStream dis) throws IOException {
-		return valueOf(dis.readUTF());
-	}
-
-	/**
-	 * Creates an instance, given the current ActivationType.
-	 *
-	 * @return an instance of the current ActivationType.
-	 */
-	public Activation create() {
-		switch (this) {
-			case SOFTMAX:
-				return new Softmax();
-			case IDENTITY:
-				return new Identity();
-			case TANH:
-				return new TanH();
-			case SIGMOID:
-				return new Sigmoid();
-			case RELU:
-			default:
-				return new ReLU();
+public enum ActivationType implements Activation {
+	RELU {
+		public Type getType() {
+			return Type.RELU;
 		}
-	}
 
-	/**
-	 * Exports the ActivationType.
-	 *
-	 * @param dos the output stream
-	 */
-	public void export(DataOutputStream dos) throws IOException {
-		dos.writeUTF(toString());
+		public void activation(float[] x, int batchSize) {
+			if (batchSize <= 0)
+				throw new IllegalArgumentException("Batch size must be > 0");
+
+			IntStream.range(0, x.length).parallel().forEach(i -> {
+				// same as max of 0 and x
+				if (x[i] < 0)
+					x[i] = 0;
+			});
+		}
+
+		public float[] derivative(float[] x) {
+			float[] derivative = new float[x.length];
+
+			IntStream.range(0, x.length).parallel().forEach(i -> derivative[i] = x[i] > 0 ? 1 : 0);
+
+			return derivative;
+		}
+	}, IDENTITY {
+		public Type getType() {
+			return Type.IDENTITY;
+		}
+
+		public void activation(float[] x, int batchSize) {
+		}
+
+		public float[] derivative(float[] x) {
+			float[] derivative = new float[x.length];
+
+			IntStream.range(0, x.length).parallel().forEach(b -> derivative[b] = 1);
+
+			return derivative;
+		}
+	}, TANH {
+		public Type getType() {
+			return Type.TANH;
+		}
+
+		public void activation(float[] x, int batchSize) {
+			if (batchSize <= 0)
+				throw new IllegalArgumentException("Batch size must be > 0");
+
+			IntStream.range(0, x.length).parallel().forEach(i -> x[i] = (float) Math.tanh(x[i]));
+		}
+
+		public float[] derivative(float[] x) {
+			float[] derivative = new float[x.length];
+
+			IntStream.range(0, x.length).parallel().forEach(i -> derivative[i] = 1 - (float) Math.pow(x[i], 2));
+
+			return derivative;
+		}
+	}, SIGMOID {
+		public Type getType() {
+			return Type.SIGMOID;
+		}
+
+		public void activation(float[] x, int batchSize) {
+			if (batchSize <= 0)
+				throw new IllegalArgumentException("Batch size must be > 0");
+
+			IntStream.range(0, x.length).parallel().forEach(i -> x[i] = 1 / (float) (1 + Math.exp(-x[i])));
+		}
+
+		public float[] derivative(float[] x) {
+			float[] derivative = new float[x.length];
+
+			IntStream.range(0, x.length).parallel().forEach(i -> derivative[i] = x[i] * (1 - x[i]));
+
+			return derivative;
+		}
 	}
 }

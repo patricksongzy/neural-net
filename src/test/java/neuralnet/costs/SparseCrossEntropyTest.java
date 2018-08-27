@@ -1,13 +1,12 @@
 package neuralnet.costs;
 
-import neuralnet.activations.ActivationType;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 class SparseCrossEntropyTest {
-	private final Cost SPARSE_CE = CostType.SPARSE_CROSS_ENTROPY.create();
+	private final Cost SPARSE_CE = CostType.SPARSE_CROSS_ENTROPY;
 
 	@Test
 	void cost() {
@@ -18,17 +17,8 @@ class SparseCrossEntropyTest {
 
 	@Test
 	void derivative() {
-		float[] delta = SPARSE_CE.derivative(new float[]{0.2f, 0.6f, 0.1f, 0.0f, 0.1f}, new float[]{2},
-			ActivationType.SIGMOID.create(), 1);
-
-		assertArrayEquals(new float[]{0, 0, -0.9f, 0, 0}, delta, 1e-8f);
-	}
-
-	@Test
-	void derivativeSoftmax() {
 		// this is just a general test
-		float[] delta = SPARSE_CE.derivative(new float[]{0.2f, 0.6f, 0.1f, 0.0f, 0.1f}, new float[]{2},
-			ActivationType.SOFTMAX.create(), 1);
+		float[] delta = SPARSE_CE.derviativeSoftmax(new float[]{0.2f, 0.6f, 0.1f, 0.0f, 0.1f}, new float[]{2}, 1);
 
 		assertArrayEquals(new float[]{0.2f, 0.6f, -0.9f, 0.0f, 0.1f}, delta);
 	}

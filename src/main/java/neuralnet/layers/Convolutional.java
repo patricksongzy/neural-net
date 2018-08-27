@@ -58,7 +58,7 @@ public class Convolutional implements Layer {
 		this.updaterType = updaterType;
 		this.initializer = initializer;
 
-		activation = activationType.create();
+		activation = activationType;
 	}
 
 	/**
@@ -85,7 +85,7 @@ public class Convolutional implements Layer {
 		biasUpdaters = new Updater[filterAmount];
 		biases = new float[filterAmount];
 
-		activation = ActivationType.fromString(dis).create();
+		activation = Activation.fromString(dis);
 		updaterType = UpdaterType.fromString(dis);
 
 		for (int f = 0; f < filterAmount; f++) {
@@ -114,15 +114,29 @@ public class Convolutional implements Layer {
 		this.depth = dimensions[2];
 
 		if (inputHeight <= 0 || inputWidth <= 0 || depth <= 0)
-			throw new IllegalArgumentException();
+			throw new IllegalArgumentException("Invalid input dimensions.");
+
+		if (pad < 0)
+			throw new IllegalArgumentException("Padding must be > 0.");
 
 		// calculating the post padding dimensions
 		padHeight = inputHeight + 2 * pad;
 		padWidth = inputWidth + 2 * pad;
 
+		if ((padHeight - filterSize) % stride != 0)
+			throw new IllegalArgumentException("Invalid output dimensions.");
+		if ((padWidth - filterSize) % stride != 0)
+			throw new IllegalArgumentException("Invalid output dimensions.");
+
 		// calculating the post convolution dimensions
 		this.outputHeight = (padHeight - filterSize) / stride + 1;
 		this.outputWidth = (padWidth - filterSize) / stride + 1;
+
+		if (outputHeight <= 0 || outputWidth <= 0 || filterAmount <= 0)
+			throw new IllegalArgumentException("Invalid output dimensions.");
+
+		if (filterSize <= 0)
+			throw new IllegalArgumentException("Invalid filter dimensions.");
 
 		filterUpdaters = new Updater[filterAmount * depth * filterSize * filterSize];
 		filters = new float[filterAmount * depth * filterSize * filterSize];
@@ -158,6 +172,9 @@ public class Convolutional implements Layer {
 	 * @return the padded input
 	 */
 	float[] pad(float[] input, int batchSize) {
+		if (batchSize <= 0)
+			throw new IllegalArgumentException("Batch size must be > 0.");
+
 		if (pad > 0) {
 			// creating an array, with the dimensions of the padded input
 			float[] out = new float[batchSize * depth * padHeight * padWidth];
@@ -235,7 +252,7 @@ public class Convolutional implements Layer {
 
 		for (int t = 0; t < output.length; t++) {
 			// back propagation on the Convolutional layers are calculated a layer ahead
-			previousDelta[t] = cost.derivative(output[t], target[t], activation, batchSize);
+			previousDelta[t] = cost.derivative(output[t], target[t], batchSize);
 		}
 
 		return backward(previousDelta);
@@ -255,20 +272,13 @@ public class Convolutional implements Layer {
 			output[t] = activation.derivative(output[t]);
 
 			IntStream.range(0, batchSize).parallel().forEach(b -> {
-				int size = output.length / batchSize;
-				if (activation.getType() != ActivationType.SOFTMAX) {
-					for (int i = 0; i < size; i++) {
-						previousDelta[time][i + size * b] *= output[time][i + size * b];
-					}
-				}
-
 				for (int f = 0; f < filterAmount; f++) {
 					for (int i = 0, h = 0; i < outputHeight; i++, h += stride) {
 						for (int j = 0, w = 0; j < outputWidth; j++, w += stride) {
 							int index = j + outputWidth * (i + outputHeight * (f + filterAmount * b));
 
 							// the bias gradient is the delta, since biases are just added to the output
-							float d = previousDelta[time][index];
+							float d = previousDelta[time][index] * output[time][index];
 							biasGradient[f] += d;
 
 							for (int k = 0; k < depth; k++) {
@@ -365,7 +375,7 @@ public class Convolutional implements Layer {
 		dos.writeInt(filterAmount);
 		dos.writeInt(filterSize);
 
-		activation.getType().export(dos);
+		activation.export(dos);
 		updaterType.export(dos);
 
 		for (int f = 0; f < filterAmount; f++) {
@@ -419,6 +429,7 @@ public class Convolutional implements Layer {
 		 */
 		public Builder pad(int pad) {
 			this.pad = pad;
+
 			return this;
 		}
 
@@ -431,6 +442,7 @@ public class Convolutional implements Layer {
 		 */
 		public Builder stride(int stride) {
 			this.stride = stride;
+
 			return this;
 		}
 
@@ -441,6 +453,7 @@ public class Convolutional implements Layer {
 		 */
 		public Builder filterAmount(int filterAmount) {
 			this.filterAmount = filterAmount;
+
 			return this;
 		}
 
@@ -451,6 +464,7 @@ public class Convolutional implements Layer {
 		 */
 		public Builder filterSize(int filterSize) {
 			this.filterSize = filterSize;
+
 			return this;
 		}
 
@@ -460,10 +474,7 @@ public class Convolutional implements Layer {
 		 * @param initializer the initializer
 		 */
 		public Builder initializer(Initializer initializer) {
-			if (initializer != null)
-				this.initializer = initializer;
-			else
-				throw new IllegalArgumentException();
+			this.initializer = initializer;
 
 			return this;
 		}
@@ -474,10 +485,7 @@ public class Convolutional implements Layer {
 		 * @param updaterType the updater type
 		 */
 		public Builder updaterType(UpdaterType updaterType) {
-			if (updaterType != null)
-				this.updaterType = updaterType;
-			else
-				throw new IllegalArgumentException();
+			this.updaterType = updaterType;
 
 			return this;
 		}
@@ -488,19 +496,13 @@ public class Convolutional implements Layer {
 		 * @param activationType the activation type
 		 */
 		public Builder activationType(ActivationType activationType) {
-			if (activationType != null)
-				this.activationType = activationType;
-			else
-				throw new IllegalArgumentException();
+			this.activationType = activationType;
 
 			return this;
 		}
 
 		public Convolutional build() {
-			if (pad >= 0 && stride > 0 && filterAmount > 0 && filterSize > 0)
-				return new Convolutional(pad, stride, filterAmount, filterSize, initializer, updaterType, activationType);
-
-			throw new IllegalArgumentException();
+			return new Convolutional(pad, stride, filterAmount, filterSize, initializer, updaterType, activationType);
 		}
 	}
 }

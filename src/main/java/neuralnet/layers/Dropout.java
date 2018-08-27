@@ -1,6 +1,5 @@
 package neuralnet.layers;
 
-import neuralnet.activations.Identity;
 import neuralnet.costs.Cost;
 
 import java.io.DataInputStream;
@@ -21,6 +20,9 @@ public class Dropout implements Layer {
 	private float[][] output;
 
 	private Dropout(float dropout) {
+		if (dropout < 0 || dropout >= 1)
+			throw new IllegalArgumentException("Dropout must be > 0 and < 1.");
+
 		this.dropout = dropout;
 	}
 
@@ -41,7 +43,7 @@ public class Dropout implements Layer {
 		float[][] delta = new float[target.length][];
 
 		for (int t = 0; t < output.length; t++) {
-			delta[t] = cost.derivative(output[t], target[t], new Identity(), batchSize);
+			delta[t] = cost.derivative(output[t], target[t], batchSize);
 		}
 
 		return delta;
@@ -114,10 +116,7 @@ public class Dropout implements Layer {
 		}
 
 		public Dropout build() {
-			if (dropout > 0)
-				return new Dropout(dropout);
-
-			throw new IllegalArgumentException();
+			return new Dropout(dropout);
 		}
 	}
 }

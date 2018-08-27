@@ -3,12 +3,164 @@ package neuralnet.costs;
 import java.io.DataInputStream;
 import java.io.DataOutputStream;
 import java.io.IOException;
+import java.util.stream.IntStream;
 
 /**
  * The CostType is used for exporting and importing neural networks, and for repeatedly creating instances of a cost.
  */
-public enum CostType {
-	CROSS_ENTROPY, MEAN_SQUARE_ERROR, SPARSE_CROSS_ENTROPY;
+public enum CostType implements Cost {
+	CROSS_ENTROPY {
+		public CostType getType() {
+			return CostType.CROSS_ENTROPY;
+		}
+
+		public float cost(float[] out, float[] target) {
+			return (float) -IntStream.range(0, target.length).parallel().mapToDouble(i -> (target[i] * Math.log(out[i] + 1e-16))).sum();
+		}
+
+		public float[] derivative(float[] output, float[] target, int batchSize) {
+			int size = output.length / batchSize;
+
+			if (batchSize <= 0)
+				throw new IllegalArgumentException("Batch size must be > 0.");
+			if (output.length < (size - 1) + size * (batchSize - 1) || output.length != target.length)
+				throw new IllegalArgumentException("Invalid array lengths.");
+
+			float[] delta = new float[output.length];
+
+			IntStream.range(0, batchSize).parallel().forEach(b -> {
+				for (int i = 0; i < size; i++) {
+					int index = i + size * b;
+
+					delta[i + size * b] = (-target[index] / output[index]);
+				}
+			});
+
+			return delta;
+		}
+
+		public float[] derviativeSoftmax(float[] output, float[] target, int batchSize) {
+			int size = output.length / batchSize;
+
+			if (batchSize <= 0)
+				throw new IllegalArgumentException("Batch size must be > 0.");
+			if (output.length < (size - 1) + size * (batchSize - 1) || output.length != target.length)
+				throw new IllegalArgumentException("Invalid array lengths.");
+
+			float[] delta = new float[output.length];
+
+			IntStream.range(0, batchSize).parallel().forEach(b -> {
+				for (int i = 0; i < size; i++) {
+					int index = i + size * b;
+
+					delta[index] = (output[index] - target[index]);
+				}
+			});
+
+			return delta;
+		}
+	}, MEAN_SQUARE_ERROR {
+		public CostType getType() {
+			return CostType.MEAN_SQUARE_ERROR;
+		}
+
+		public float cost(float[] output, float[] target) {
+			if (output.length != target.length)
+				throw new IllegalArgumentException("Invalid array lengths.");
+
+			float cost = (float) IntStream.range(0, target.length).parallel().mapToDouble(i -> Math.pow(target[i] - output[i], 2)).sum();
+
+			return 0.5f * cost;
+		}
+
+		public float[] derivative(float[] output, float[] target, int batchSize) {
+			int size = output.length / batchSize;
+
+			if (batchSize <= 0)
+				throw new IllegalArgumentException("Batch size must be > 0.");
+			if (output.length < (size - 1) + size * (batchSize - 1))
+				throw new IllegalArgumentException("Invalid array lengths.");
+
+			float[] delta = new float[output.length];
+
+			IntStream.range(0, batchSize).parallel().forEach(b -> {
+				for (int i = 0; i < size; i++) {
+					int index = i + size * b;
+
+					delta[index] = output[index] - target[index];
+				}
+			});
+
+			return delta;
+		}
+
+		public float[] derviativeSoftmax(float[] output, float[] target, int batchSize) {
+			throw new UnsupportedOperationException();
+		}
+	}, SPARSE_CROSS_ENTROPY {
+		public CostType getType() {
+			return CostType.SPARSE_CROSS_ENTROPY;
+		}
+
+		public float cost(float[] output, float[] target) {
+			int size = output.length / target.length;
+
+			if (output.length < (size - 1) + size * (target.length - 1))
+				throw new IllegalArgumentException("Invalid array lengths.");
+
+			float cost = 0;
+			for (int b = 0; b < target.length; b++) {
+				if (target[b] > output.length)
+					throw new IllegalArgumentException("Invalid target.");
+
+				cost += Math.log(output[(int) target[b] + size * b] + 1e-16);
+			}
+
+			return -cost;
+		}
+
+		public float[] derivative(float[] output, float[] target, int batchSize) {
+			int size = output.length / batchSize;
+
+			if (batchSize <= 0)
+				throw new IllegalArgumentException("Batch size must be > 0.");
+			if (output.length < (size - 1) + size * (batchSize - 1) || output.length != target.length)
+				throw new IllegalArgumentException("Invalid array lengths.");
+
+			float[] delta = new float[output.length];
+
+			IntStream.range(0, batchSize).parallel().forEach(b -> {
+				if (target[b] > output.length)
+					throw new IllegalArgumentException("Invalid target.");
+
+				int index = (int) target[b] + size * b;
+
+				delta[index] = -1 / output[index];
+			});
+
+			return delta;
+		}
+
+		public float[] derviativeSoftmax(float[] output, float[] target, int batchSize) {
+			int size = output.length / batchSize;
+
+			if (batchSize <= 0)
+				throw new IllegalArgumentException("Batch size must be > 0.");
+			if (output.length < (size - 1) + size * (batchSize - 1))
+				throw new IllegalArgumentException("Invalid array lengths.");
+
+			float[] delta = new float[output.length];
+
+			IntStream.range(0, batchSize).parallel().forEach(b -> {
+				int index = (int) target[b] + size * b;
+
+				System.arraycopy(output, size * b, delta, size * b, size);
+				delta[index] -= 1;
+			});
+
+			return delta;
+		}
+	};
 
 	/**
 	 * Creates a CostType, given an input stream.
@@ -18,23 +170,6 @@ public enum CostType {
 	 */
 	public static CostType fromString(DataInputStream dis) throws IOException {
 		return valueOf(dis.readUTF());
-	}
-
-	/**
-	 * Creates an instance, given the current CostType.
-	 *
-	 * @return an instance of the current CostType
-	 */
-	public Cost create() {
-		switch (this) {
-			case MEAN_SQUARE_ERROR:
-				return new MeanSquareError();
-			case SPARSE_CROSS_ENTROPY:
-				return new SparseCrossEntropy();
-			case CROSS_ENTROPY:
-			default:
-				return new CrossEntropy();
-		}
 	}
 
 	/**

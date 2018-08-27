@@ -1,6 +1,5 @@
 package neuralnet.layers;
 
-import neuralnet.activations.Identity;
 import neuralnet.costs.Cost;
 
 import java.io.DataInputStream;
@@ -42,14 +41,14 @@ public class Pooling implements Layer {
 
 	public void setDimensions(int... dimensions) {
 		if (dimensions.length != 3)
-			throw new IllegalArgumentException();
+			throw new IllegalArgumentException("Invalid input dimensions.");
 
 		this.inputHeight = dimensions[0];
 		this.inputWidth = dimensions[1];
 		this.filterAmount = dimensions[2];
 
 		if (filterAmount <= 0 || inputHeight <= 0 || inputWidth <= 0)
-			throw new IllegalArgumentException();
+			throw new IllegalArgumentException("Invalid input dimensions.");
 
 		this.downsampleWidth = (inputWidth - downsampleSize) / downsampleStride + 1;
 		this.downsampleHeight = (inputHeight - downsampleSize) / downsampleStride + 1;
@@ -103,7 +102,7 @@ public class Pooling implements Layer {
 		float[][] delta = new float[output.length][];
 
 		for (int t = 0; t < output.length; t++)
-			delta[t] = cost.derivative(output[t], target[t], new Identity(), batchSize);
+			delta[t] = cost.derivative(output[t], target[t], batchSize);
 
 		return backward(delta);
 	}

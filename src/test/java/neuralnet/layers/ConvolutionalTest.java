@@ -15,7 +15,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 class ConvolutionalTest {
 	@Test
 	void padTest() {
-		Convolutional convolutional = new Convolutional.Builder().filterAmount(1).activationType(ActivationType.RELU).filterSize(3)
+		Convolutional convolutional = new Convolutional.Builder().filterAmount(1).activationType(ActivationType.RELU).filterSize(2)
 			.initializer(new HeInitialization()).pad(3).stride(2).updaterType(UpdaterType.ADAM).build();
 		convolutional.setDimensions(2, 2, 2);
 		float[] input = new float[]

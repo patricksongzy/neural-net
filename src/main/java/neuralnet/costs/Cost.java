@@ -1,7 +1,5 @@
 package neuralnet.costs;
 
-import neuralnet.activations.Activation;
-
 /**
  * Cost functions evaluate the performance of a neural network. They must be differentiable, in order to back-propagate.
  */
@@ -27,8 +25,9 @@ public interface Cost {
 	 *
 	 * @param output the neural network output
 	 * @param target the target
-	 * @param activation the activation function
 	 * @return the derivative of cost
 	 */
-	float[] derivative(float[] output, float[] target, Activation activation, int batchSize);
+	float[] derivative(float[] output, float[] target, int batchSize);
+
+	float[] derviativeSoftmax(float[] output, float[] target, int batchSize);
 }
