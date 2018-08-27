@@ -6,7 +6,6 @@ import org.jocl.blast.CLBlastLayout;
 
 import static org.jocl.CL.*;
 import static org.jocl.blast.CLBlast.CLBlastSgemm;
-import static org.jocl.blast.CLBlast.CLBlastSger;
 
 public class GPU {
 	private static cl_context context;
@@ -75,6 +74,8 @@ public class GPU {
 		// Obtain a platform ID
 		cl_platform_id platforms[] = new cl_platform_id[numPlatforms];
 		clGetPlatformIDs(platforms.length, platforms, null);
+		if (platformIndex > platforms.length)
+			throw new IllegalArgumentException("Invalid platform.");
 		cl_platform_id platform = platforms[platformIndex];
 
 		// Initialize the context properties
@@ -89,6 +90,8 @@ public class GPU {
 		// Obtain a device ID
 		cl_device_id devices[] = new cl_device_id[numDevices];
 		clGetDeviceIDs(platform, deviceType, numDevices, devices, null);
+		if (deviceIndex > devices.length)
+			throw new IllegalArgumentException("Invalid device.");
 		cl_device_id device = devices[deviceIndex];
 
 		// Create a context for the selected device
@@ -125,44 +128,6 @@ public class GPU {
 		cl_event event = new cl_event();
 		CLBlastSgemm(CLBlastLayout.CLBlastLayoutRowMajor, aTranspose, bTranspose,
 			m, n, k, 1, aBuffer, 0, lda, bBuffer, 0, ldb, 1, cBuffer, 0, ldc, commandQueue, event);
-
-		// Copy the result data back to the host
-		float result[] = new float[m * n];
-		clEnqueueReadBuffer(commandQueue, cBuffer, true, 0, m * n
-			* Sizeof.cl_float, Pointer.to(result), 0, null, null);
-
-		// Clean up
-		clReleaseMemObject(aBuffer);
-		clReleaseMemObject(bBuffer);
-		clReleaseMemObject(cBuffer);
-		clReleaseEvent(event);
-
-		return result;
-	}
-
-	@SuppressWarnings("WeakerAccess")
-	public static float[] sger(int m, int n, float[] x, float[] y, float[] a, int lda) {
-		// not yet removed since this may be used in the future
-
-		// Create the device input buffers
-		cl_mem aBuffer = clCreateBuffer(context, CL_MEM_READ_ONLY, m
-			* Sizeof.cl_float, null, null);
-		cl_mem bBuffer = clCreateBuffer(context, CL_MEM_READ_ONLY, n
-			* Sizeof.cl_float, null, null);
-		cl_mem cBuffer = clCreateBuffer(context, CL_MEM_READ_WRITE, m * n
-			* Sizeof.cl_float, null, null);
-
-		// Copy the host data to the device
-		clEnqueueWriteBuffer(commandQueue, aBuffer, true, 0, m
-			* Sizeof.cl_float, Pointer.to(x), 0, null, null);
-		clEnqueueWriteBuffer(commandQueue, bBuffer, true, 0, n
-			* Sizeof.cl_float, Pointer.to(y), 0, null, null);
-		clEnqueueWriteBuffer(commandQueue, cBuffer, true, 0, m * n
-			* Sizeof.cl_float, Pointer.to(a), 0, null, null);
-
-		cl_event event = new cl_event();
-		CLBlastSger(CLBlastLayout.CLBlastLayoutRowMajor, m, n, 1, aBuffer, 0, 1, bBuffer, 0, 1,
-			cBuffer, 0, lda, commandQueue, event);
 
 		// Copy the result data back to the host
 		float result[] = new float[m * n];
