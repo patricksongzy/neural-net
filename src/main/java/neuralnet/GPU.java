@@ -6,6 +6,7 @@ import org.jocl.blast.CLBlastLayout;
 
 import static org.jocl.CL.*;
 import static org.jocl.blast.CLBlast.CLBlastSgemm;
+import static org.jocl.blast.CLBlast.CLBlastSger;
 
 public class GPU {
 	private static cl_context context;
@@ -53,6 +54,7 @@ public class GPU {
 		commandQueue = clCreateCommandQueueWithProperties(context, device, new cl_queue_properties(), null);
 
 		Runtime.getRuntime().addShutdownHook(new Thread(() -> {
+			clFlush(commandQueue);
 			clReleaseCommandQueue(commandQueue);
 			clReleaseContext(context);
 		}));
@@ -138,7 +140,10 @@ public class GPU {
 		return result;
 	}
 
+	@SuppressWarnings("WeakerAccess")
 	public static float[] sger(int m, int n, float[] x, float[] y, float[] a, int lda) {
+		// not yet removed since this may be used in the future
+
 		// Create the device input buffers
 		cl_mem aBuffer = clCreateBuffer(context, CL_MEM_READ_ONLY, m
 			* Sizeof.cl_float, null, null);
@@ -156,7 +161,7 @@ public class GPU {
 			* Sizeof.cl_float, Pointer.to(a), 0, null, null);
 
 		cl_event event = new cl_event();
-		CLBlast.CLBlastSger(CLBlastLayout.CLBlastLayoutRowMajor, m, n, 1, aBuffer, 0, 1, bBuffer, 0, 1,
+		CLBlastSger(CLBlastLayout.CLBlastLayoutRowMajor, m, n, 1, aBuffer, 0, 1, bBuffer, 0, 1,
 			cBuffer, 0, lda, commandQueue, event);
 
 		// Copy the result data back to the host

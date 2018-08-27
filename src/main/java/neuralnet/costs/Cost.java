@@ -30,5 +30,5 @@ public interface Cost {
 	 * @param activation the activation function
 	 * @return the derivative of cost
 	 */
-	float[][] derivative(float[][] output, float[][] target, Activation activation);
+	float[] derivative(float[] output, float[] target, Activation activation, int batchSize);
 }

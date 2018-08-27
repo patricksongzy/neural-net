@@ -10,20 +10,13 @@ public class Identity implements Activation {
 		return ActivationType.IDENTITY;
 	}
 
-	public void activation(float[] x) {
+	public void activation(float[] x, int batchSize) {
 	}
 
-	public void activation(float[][] x) {
-	}
+	public float[] derivative(float[] x) {
+		float[] derivative = new float[x.length];
 
-	public float[][] derivative(float[][] x) {
-		float[][] derivative = new float[x.length][x[0].length];
-
-		IntStream.range(0, x.length).parallel().forEach(b -> {
-			for (int i = 0; i < x[0].length; i++) {
-				derivative[b][i] = 1;
-			}
-		});
+		IntStream.range(0, x.length).parallel().forEach(b -> derivative[b] = 1);
 
 		return derivative;
 	}

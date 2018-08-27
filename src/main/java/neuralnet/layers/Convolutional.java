@@ -21,6 +21,8 @@ import java.util.stream.IntStream;
 public class Convolutional implements Layer {
 	private Mode mode = Mode.TRAIN;
 
+	private int batchSize;
+
 	// the filter amount is the output depth
 	// the filter size is the size of the filters
 	private int filterAmount, filterSize;
@@ -155,20 +157,19 @@ public class Convolutional implements Layer {
 	 * @param input the input
 	 * @return the padded input
 	 */
-	float[][] pad(float[][] input) {
+	float[] pad(float[] input, int batchSize) {
 		if (pad > 0) {
 			// creating an array, with the dimensions of the padded input
-			float[][] out = new float[input.length][depth * padHeight * padWidth];
+			float[] out = new float[batchSize * depth * padHeight * padWidth];
 
 			// padding the array
-			for (int i = 0; i < input.length; i++) {
-				int position = 0;
-
+			int position = 0;
+			for (int b = 0; b < batchSize; b++) {
 				for (int j = 0; j < depth; j++) {
 					position += pad * padWidth;
 
 					for (int k = 0; k < inputWidth * inputHeight; k += inputWidth) {
-						System.arraycopy(input[i], j * inputWidth * inputHeight + k, out[i], pad + position, inputWidth);
+						System.arraycopy(input, k + (inputWidth * inputHeight) * (j + depth * b), out, pad + position, inputWidth);
 						position += padWidth;
 					}
 
@@ -182,130 +183,145 @@ public class Convolutional implements Layer {
 		return input;
 	}
 
-	public float[][] forward(float[][] x) {
-		input = pad(x);
+	public float[][] forward(float[][] x, int batchSize) {
+		this.batchSize = batchSize;
+		input = new float[x.length][];
 
-		output = new float[x.length][filterAmount * outputHeight * outputWidth];
+		for (int t = 0; t < x.length; t++) {
+			input[t] = pad(x[t], batchSize);
 
-		IntStream.range(0, x.length).parallel().forEach(b -> {
-			for (int f = 0; f < filterAmount; f++) {
-				for (int i = 0; i < outputHeight; i++) {
-					for (int j = 0; j < outputWidth; j++) {
-						// performing strides
-						int h = i * stride;
-						int w = j * stride;
+			output = new float[x.length][batchSize * filterAmount * outputHeight * outputWidth];
 
-						// convoluted value is the sum of the filters multiplied against the inputs at a certain position
-						float conv = 0;
+			int time = t;
+			IntStream.range(0, batchSize).parallel().forEach(b -> {
+				for (int f = 0; f < filterAmount; f++) {
+					for (int i = 0; i < outputHeight; i++) {
+						for (int j = 0; j < outputWidth; j++) {
+							// performing strides
+							int h = i * stride;
+							int w = j * stride;
 
-						for (int k = 0; k < depth; k++) {
-							for (int m = 0; m < filterSize; m++) {
-								for (int n = 0; n < filterSize; n++) {
-									int filterIndex = n + filterSize * (m + filterSize * (k + depth * f));
-									int inputIndex = (w + n) + padWidth * ((h + m) + padHeight * k);
+							// convoluted value is the sum of the filters multiplied against the inputs at a certain position
+							float conv = 0;
 
-									conv += filters[filterIndex] * input[b][inputIndex];
+							for (int k = 0; k < depth; k++) {
+								for (int m = 0; m < filterSize; m++) {
+									for (int n = 0; n < filterSize; n++) {
+										int filterIndex = n + filterSize * (m + filterSize * (k + depth * f));
+										int inputIndex = (w + n) + padWidth * ((h + m) + padHeight * (k + depth * b));
+
+										conv += filters[filterIndex] * input[time][inputIndex];
+									}
 								}
 							}
-						}
 
-						// adding biases to shift the activation function
-						int activatedIndex = j + outputWidth * (i + outputHeight * f);
-						output[b][activatedIndex] = (conv + biases[f]);
+							// adding biases to shift the activation function
+							int activatedIndex = j + outputWidth * (i + outputHeight * (f + filterAmount * b));
+							output[time][activatedIndex] = (conv + biases[f]);
+						}
 					}
 				}
-			}
-		});
+			});
 
-		// activation
-		activation.activation(output);
+			// activation
+			activation.activation(output[t], batchSize);
+		}
 
 		return output;
 	}
 
 	public float[][] backward(Cost cost, float[][] target) {
-		// back propagation on the Convolutional layers are calculated a layer ahead
-		float[][] previousDelta = cost.derivative(output, target, activation);
+		float[][] previousDelta = new float[output.length][];
+
+		for (int t = 0; t < output.length; t++) {
+			// back propagation on the Convolutional layers are calculated a layer ahead
+			previousDelta[t] = cost.derivative(output[t], target[t], activation, batchSize);
+		}
 
 		return backward(previousDelta);
 	}
 
 	public float[][] backward(float[][] previousDelta) {
 		// back propagation on the Convolutional layers are calculated a layer ahead
-		float[][] delta = new float[output.length][depth * padHeight * padWidth];
-		biasGradient = new float[filterAmount];
-
-		// derivative
-		output = activation.derivative(output);
-
-		// since deltas are calculated a layer ahead
-		for (int b = 0; b < previousDelta.length; b++) {
-			for (int i = 0; i < output[0].length; i++) {
-				previousDelta[b][i] *= output[b][i];
-			}
-		}
+		float[][] delta = new float[output.length][batchSize * depth * padHeight * padWidth];
 
 		gradient = new float[filterAmount * depth * filterSize * filterSize];
+		biasGradient = new float[filterAmount];
 
-		IntStream.range(0, output.length).parallel().forEach(b -> {
-			for (int f = 0; f < filterAmount; f++) {
-				for (int i = 0, h = 0; i < outputHeight; i++, h += stride) {
-					for (int j = 0, w = 0; j < outputWidth; j++, w += stride) {
-						int index = j + outputWidth * (i + outputHeight * f);
+		for (int t = 0; t < output.length; t++) {
+			final int time = t;
 
-						// the bias gradient is the delta, since biases are just added to the output
-						float d = previousDelta[b][index];
-						biasGradient[f] += d;
+			// derivative
+			output[t] = activation.derivative(output[t]);
 
-						for (int k = 0; k < depth; k++) {
-							for (int m = 0; m < filterSize; m++) {
-								for (int n = 0; n < filterSize; n++) {
-									int gradientIndex = n + filterSize * (m + filterSize * (k + depth * f));
-									int inputIndex = (w + n) + padWidth * ((h + m) + padHeight * k);
-
-									// the gradient is the delta multiplied against the input, since the filters are multiplied with the
-									// input
-									gradient[gradientIndex] += d * input[b][inputIndex];
-								}
-							}
-						}
+			IntStream.range(0, batchSize).parallel().forEach(b -> {
+				int size = output.length / batchSize;
+				if (activation.getType() != ActivationType.SOFTMAX) {
+					for (int i = 0; i < size; i++) {
+						previousDelta[time][i + size * b] *= output[time][i + size * b];
 					}
 				}
-			}
-		});
 
-		// calculating gradient
-		if (mode == Mode.TRAIN) {
-			// updating parameters
-			update(biasGradient, gradient);
-		}
+				for (int f = 0; f < filterAmount; f++) {
+					for (int i = 0, h = 0; i < outputHeight; i++, h += stride) {
+						for (int j = 0, w = 0; j < outputWidth; j++, w += stride) {
+							int index = j + outputWidth * (i + outputHeight * (f + filterAmount * b));
 
-		// calculating delta
-		IntStream.range(0, output.length).parallel().forEach(b -> {
-			for (int k = 0; k < depth; k++) {
-				for (int i = 0; i < padHeight; i++) {
-					for (int j = 0; j < padWidth; j++) {
-						int h = i * stride;
-						int w = j * stride;
-						int deltaIndex = j + padWidth * (i + padHeight * k);
+							// the bias gradient is the delta, since biases are just added to the output
+							float d = previousDelta[time][index];
+							biasGradient[f] += d;
 
-						for (int f = 0; f < filterAmount; f++) {
-							for (int m = 0; m < filterSize; m++) {
-								for (int n = 0; n < filterSize; n++) {
-									if ((w - n) < outputWidth && (h - m) < outputHeight && (w - n) >= 0 && (h - m) >= 0) {
-										int upsampledIndex = (w - n) + outputWidth * ((h - m) + outputHeight * f);
-										int filterIndex = n + filterSize * (m + filterSize * (k + depth * f));
+							for (int k = 0; k < depth; k++) {
+								for (int m = 0; m < filterSize; m++) {
+									for (int n = 0; n < filterSize; n++) {
+										int gradientIndex = n + filterSize * (m + filterSize * (k + depth * f));
+										int inputIndex = (w + n) + padWidth * ((h + m) + padHeight * (k + depth * b));
 
-										// same as forward propagation, except the activation derivative is multiplied later
-										delta[b][deltaIndex] += previousDelta[b][upsampledIndex] * filters[filterIndex];
+										// the gradient is the delta multiplied against the input, since the filters are multiplied with
+										// the
+										// input
+										gradient[gradientIndex] += d * input[time][inputIndex];
 									}
 								}
 							}
 						}
 					}
 				}
+			});
+
+			// calculating gradient
+			if (mode != Mode.GRADIENT_CHECK) {
+				// updating parameters
+				update(biasGradient, gradient);
 			}
-		});
+
+			// calculating delta
+			IntStream.range(0, batchSize).parallel().forEach(b -> {
+				for (int k = 0; k < depth; k++) {
+					for (int i = 0; i < padHeight; i++) {
+						for (int j = 0; j < padWidth; j++) {
+							int h = i * stride;
+							int w = j * stride;
+							int deltaIndex = j + padWidth * (i + padHeight * (k + depth * b));
+
+							for (int f = 0; f < filterAmount; f++) {
+								for (int m = 0; m < filterSize; m++) {
+									for (int n = 0; n < filterSize; n++) {
+										if ((w - n) < outputWidth && (h - m) < outputHeight && (w - n) >= 0 && (h - m) >= 0) {
+											int upsampledIndex = (w - n) + outputWidth * ((h - m) + outputHeight * f);
+											int filterIndex = n + filterSize * (m + filterSize * (k + depth * (f + filterAmount * b)));
+
+											// same as forward propagation, except the activation derivative is multiplied later
+											delta[time][deltaIndex] += previousDelta[time][upsampledIndex] * filters[filterIndex];
+										}
+									}
+								}
+							}
+						}
+					}
+				}
+			});
+		}
 
 		return delta;
 	}
@@ -318,14 +334,14 @@ public class Convolutional implements Layer {
 	 */
 	private void update(float[] delta, float[] gradient) {
 		IntStream.range(0, filterAmount).parallel().forEach(f -> {
-			biases[f] += biasUpdaters[f].update(delta[f] / output.length);
+			biases[f] += biasUpdaters[f].update(delta[f] / (batchSize * output.length));
 
 			for (int k = 0; k < depth; k++) {
 				for (int m = 0; m < filterSize; m++) {
 					for (int n = 0; n < filterSize; n++) {
 						int filterIndex = n + filterSize * (m + filterSize * (k + depth * f));
 
-						filters[filterIndex] += filterUpdaters[filterIndex].update(gradient[filterIndex] / output.length);
+						filters[filterIndex] += filterUpdaters[filterIndex].update(gradient[filterIndex] / (batchSize * output.length));
 					}
 				}
 			}
