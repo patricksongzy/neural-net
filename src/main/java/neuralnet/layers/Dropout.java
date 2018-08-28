@@ -17,7 +17,7 @@ public class Dropout implements Layer {
 	private int batchSize;
 	private int inputSize;
 	private float dropout;
-	private float[][] output;
+	private float[] output;
 
 	private Dropout(float dropout) {
 		if (dropout < 0 || dropout >= 1)
@@ -39,21 +39,15 @@ public class Dropout implements Layer {
 		this.mode = mode;
 	}
 
-	public float[][] backward(Cost cost, float[][] target) {
-		float[][] delta = new float[target.length][];
-
-		for (int t = 0; t < output.length; t++) {
-			delta[t] = cost.derivative(output[t], target[t], batchSize);
-		}
-
-		return delta;
+	public float[] backward(Cost cost, float[] target) {
+		return cost.derivative(output, target, batchSize);
 	}
 
 	public LayerType getType() {
 		return LayerType.DROPOUT;
 	}
 
-	public float[][] backward(float[][] previousDelta) {
+	public float[] backward(float[] previousDelta) {
 		return previousDelta;
 	}
 
@@ -65,26 +59,24 @@ public class Dropout implements Layer {
 		return new float[0][][];
 	}
 
-	public float[][] forward(float[][] input, int batchSize) {
+	public void update(int size) {
+	}
+
+	public float[] forward(float[] input, int batchSize) {
 		this.batchSize = batchSize;
 
 		if (mode == Mode.TRAIN) {
-			output = new float[input.length][batchSize * inputSize];
+			output = new float[batchSize * inputSize];
 
-			int size = input.length / batchSize;
-			for (int t = 0; t < input.length; t++) {
-				int time = t;
-
-				IntStream.range(0, batchSize).parallel().forEach(b -> {
-					for (int i = 0; i < size; i++) {
-						// if a random float is past the dropout threshold, then drop the connection by setting the output to zero
-						if (ThreadLocalRandom.current().nextFloat() < dropout)
-							output[time][i + size * b] = 0;
-						else
-							output[time][i + size * b] = input[time][i + size * b] / dropout;
-					}
-				});
-			}
+			IntStream.range(0, batchSize).parallel().forEach(b -> {
+				for (int i = 0; i < inputSize; i++) {
+					// if a random float is past the dropout threshold, then drop the connection by setting the output to zero
+					if (ThreadLocalRandom.current().nextFloat() < dropout)
+						output[i + inputSize * b] = 0;
+					else
+						output[i + inputSize * b] = input[i + inputSize * b] / dropout;
+				}
+			});
 
 			return output;
 		}

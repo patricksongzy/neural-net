@@ -14,6 +14,7 @@ import java.io.DataInputStream;
 import java.io.DataOutputStream;
 import java.io.IOException;
 import java.util.Arrays;
+import java.util.LinkedList;
 import java.util.stream.IntStream;
 
 public class GRU implements Layer {
@@ -23,12 +24,13 @@ public class GRU implements Layer {
 	private int inputSize, outputSize;
 
 	private float[] wz, wr, wh;
+	private float[] wzT, wrT, whT;
 	private float[] dWz, dWr, dWh;
 	private float[] bz, br, bh;
 	private float[] dBz, dBr, dBh;
 
-	private float[][] h, y;
-	private float[][] xh, xrh, z, r, hc;
+	private float[] h;
+	private LinkedList<float[]> xh, xrh, z, r, hc, y;
 
 	private Initializer initializer;
 	private UpdaterType updaterType;
@@ -89,6 +91,36 @@ public class GRU implements Layer {
 			bh[i] = dis.readFloat();
 			updaters[position++] = updaterType.create(dis);
 		}
+
+		wzT = new float[outputSize * (inputSize + outputSize)];
+		wrT = new float[outputSize * (inputSize + outputSize)];
+		whT = new float[outputSize * (inputSize + outputSize)];
+
+		IntStream.range(0, outputSize).parallel().forEach(i -> {
+			for (int j = 0; j < inputSize + outputSize; j++) {
+				int index = j + (inputSize + outputSize) * i;
+				int transposedIndex = i + outputSize * j;
+
+				wzT[transposedIndex] = wz[index];
+				wrT[transposedIndex] = wr[index];
+				whT[transposedIndex] = wh[index];
+			}
+		});
+
+		dWz = new float[outputSize * inputSize + outputSize * outputSize];
+		dWr = new float[outputSize * inputSize + outputSize * outputSize];
+		dWh = new float[outputSize * inputSize + outputSize * outputSize];
+
+		dBz = new float[outputSize];
+		dBr = new float[outputSize];
+		dBh = new float[outputSize];
+
+		xh = new LinkedList<>();
+		xrh = new LinkedList<>();
+		hc = new LinkedList<>();
+		z = new LinkedList<>();
+		r = new LinkedList<>();
+		y = new LinkedList<>();
 	}
 
 	public void setDimensions(int... dimensions) {
@@ -125,6 +157,41 @@ public class GRU implements Layer {
 			wr[i] = initializer.initialize(outputSize);
 			wh[i] = initializer.initialize(outputSize);
 		}
+
+
+		wzT = new float[outputSize * (inputSize + outputSize)];
+		wrT = new float[outputSize * (inputSize + outputSize)];
+		whT = new float[outputSize * (inputSize + outputSize)];
+
+		transposeWeights();
+
+		dWz = new float[outputSize * inputSize + outputSize * outputSize];
+		dWr = new float[outputSize * inputSize + outputSize * outputSize];
+		dWh = new float[outputSize * inputSize + outputSize * outputSize];
+
+		dBz = new float[outputSize];
+		dBr = new float[outputSize];
+		dBh = new float[outputSize];
+
+		xh = new LinkedList<>();
+		xrh = new LinkedList<>();
+		hc = new LinkedList<>();
+		z = new LinkedList<>();
+		r = new LinkedList<>();
+		y = new LinkedList<>();
+	}
+
+	private void transposeWeights() {
+		IntStream.range(0, outputSize).parallel().forEach(i -> {
+			for (int j = 0; j < inputSize + outputSize; j++) {
+				int index = j + (inputSize + outputSize) * i;
+				int transposedIndex = i + outputSize * j;
+
+				wzT[transposedIndex] = wz[index];
+				wrT[transposedIndex] = wr[index];
+				whT[transposedIndex] = wh[index];
+			}
+		});
 	}
 
 	public int[] getOutputDimensions() {
@@ -166,73 +233,172 @@ public class GRU implements Layer {
 		return LayerType.GRU;
 	}
 
-	public float[][] forward(float[][] input, int batchSize) {
+	public float[] forward(float[] input, int batchSize) {
 		this.batchSize = batchSize;
 
-		h = new float[input.length][batchSize * outputSize];
-		if (mode == Mode.GRADIENT_CHECK)
-			IntStream.range(0, input.length).parallel().forEach(t -> Arrays.fill(h[t], 0.1f));
+		if (h == null)
+			h = new float[batchSize * outputSize];
 
-		xh = new float[input.length][batchSize * (inputSize + outputSize)];
-		xrh = new float[input.length][batchSize * (inputSize + outputSize)];
-		hc = new float[input.length][batchSize * outputSize];
-		z = new float[input.length][batchSize * outputSize];
-		r = new float[input.length][batchSize * outputSize];
-		y = new float[input.length][batchSize * outputSize];
+		if (mode == Mode.GRADIENT_CHECK) {
+			Arrays.fill(h, 0.1f);
+			transposeWeights();
+		}
 
-		for (int t = 0; t < input.length; t++) {
-			for (int b = 0; b < batchSize; b++) {
-				System.arraycopy(bz, 0, z[t], outputSize * b, outputSize);
-				System.arraycopy(br, 0, r[t], outputSize * b, outputSize);
-				System.arraycopy(bh, 0, hc[t], outputSize * b, outputSize);
-				System.arraycopy(input[t], inputSize * b, xh[t], (inputSize + outputSize) * b, inputSize);
-				System.arraycopy(h[t], outputSize * b, xh[t], inputSize + (inputSize + outputSize) * b, outputSize);
-			}
+		float[] xh = new float[batchSize * (inputSize + outputSize)];
+		float[] xrh = new float[batchSize * (inputSize + outputSize)];
+		float[] hc = new float[batchSize * outputSize];
+		float[] z = new float[batchSize * outputSize];
+		float[] r = new float[batchSize * outputSize];
+		float[] y = new float[batchSize * outputSize];
 
-			z[t] = GPU.sgemm(CLBlastTranspose.CLBlastTransposeNo, CLBlastTranspose.CLBlastTransposeYes, batchSize,
-				outputSize, inputSize + outputSize, xh[t], inputSize + outputSize, wz, inputSize + outputSize, z[t], outputSize);
-			r[t] = GPU.sgemm(CLBlastTranspose.CLBlastTransposeNo, CLBlastTranspose.CLBlastTransposeYes, batchSize,
-				outputSize, inputSize + outputSize, xh[t], inputSize + outputSize, wr, inputSize + outputSize, r[t], outputSize);
+		for (int b = 0; b < batchSize; b++) {
+			System.arraycopy(bz, 0, z, outputSize * b, outputSize);
+			System.arraycopy(br, 0, r, outputSize * b, outputSize);
+			System.arraycopy(bh, 0, hc, outputSize * b, outputSize);
+			System.arraycopy(input, inputSize * b, xh, (inputSize + outputSize) * b, inputSize);
+			System.arraycopy(h, outputSize * b, xh, inputSize + (inputSize + outputSize) * b, outputSize);
+		}
 
-			outputActivation.activation(z[t], batchSize);
-			outputActivation.activation(r[t], batchSize);
+		z = GPU.sgemm(CLBlastTranspose.CLBlastTransposeNo, CLBlastTranspose.CLBlastTransposeNo, batchSize,
+			outputSize, inputSize + outputSize, xh, inputSize + outputSize, wzT, outputSize, z, outputSize);
+		r = GPU.sgemm(CLBlastTranspose.CLBlastTransposeNo, CLBlastTranspose.CLBlastTransposeNo, batchSize,
+			outputSize, inputSize + outputSize, xh, inputSize + outputSize, wrT, outputSize, r, outputSize);
 
-			for (int b = 0; b < batchSize; b++) {
-				System.arraycopy(input[t], inputSize * b, xrh[t], (inputSize + outputSize) * b, inputSize);
-				for (int i = 0; i < outputSize; i++) {
-					int index = i + outputSize * b;
-					xrh[t][(inputSize + i) + (inputSize + outputSize) * b] += r[t][index] * h[t][index];
-				}
-			}
+		outputActivation.activation(z, batchSize);
+		outputActivation.activation(r, batchSize);
 
-			hc[t] = GPU.sgemm(CLBlastTranspose.CLBlastTransposeNo, CLBlastTranspose.CLBlastTransposeYes, batchSize,
-				outputSize, inputSize + outputSize, xrh[t], inputSize + outputSize, wh, inputSize + outputSize, hc[t], outputSize);
-			activation.activation(hc[t], batchSize);
-
-			for (int b = 0; b < batchSize; b++) {
-				for (int i = 0; i < outputSize; i++) {
-					int index = i + outputSize * b;
-					h[t][index] = z[t][index] * h[t][index] + (1 - z[t][index]) * hc[t][index];
-				}
-
-				System.arraycopy(h[t], outputSize * b, y[t], outputSize * b, outputSize);
+		for (int b = 0; b < batchSize; b++) {
+			System.arraycopy(input, inputSize * b, xrh, (inputSize + outputSize) * b, inputSize);
+			for (int i = 0; i < outputSize; i++) {
+				int index = i + outputSize * b;
+				xrh[(inputSize + i) + (inputSize + outputSize) * b] += r[index] * h[index];
 			}
 		}
 
+		hc = GPU.sgemm(CLBlastTranspose.CLBlastTransposeNo, CLBlastTranspose.CLBlastTransposeNo, batchSize,
+			outputSize, inputSize + outputSize, xrh, inputSize + outputSize, whT, outputSize, hc, outputSize);
+		activation.activation(hc, batchSize);
+
+		for (int b = 0; b < batchSize; b++) {
+			for (int i = 0; i < outputSize; i++) {
+				int index = i + outputSize * b;
+				h[index] = z[index] * h[index] + (1 - z[index]) * hc[index];
+			}
+		}
+
+		this.xh.add(xh);
+		this.xrh.add(xrh);
+		this.hc.add(hc);
+		this.z.add(z);
+		this.r.add(r);
+		this.y.add(y);
+
+		System.arraycopy(h, 0, y, 0, batchSize * outputSize);
 		return y;
 	}
 
-	public float[][] backward(Cost cost, float[][] target) {
-		float[][] dy = new float[xh.length][];
-
-		for (int t = 0; t < xh.length; t++)
-			dy[t] = cost.derivative(y[t], target[t], batchSize);
+	public float[] backward(Cost cost, float[] target) {
+		float[] dy = cost.derivative(y.removeLast(), target, batchSize);
 
 		return backward(dy);
 	}
 
-	public float[][] backward(float[][] previousDelta) {
-		float[][] dx = new float[xh.length][batchSize * inputSize];
+	public float[] backward(float[] previousDelta) {
+		float[] dx = new float[batchSize * inputSize];
+
+		// these variable represent before-activation derivatives
+		float[] dh = new float[batchSize * outputSize];
+		float[] dr = new float[batchSize * outputSize];
+		float[] dz = new float[batchSize * outputSize];
+		float[] dhc = new float[batchSize * outputSize];
+
+		float[] xh = this.xh.removeLast();
+		float[] xrh = this.xrh.removeLast();
+		float[] hc = this.hc.removeLast();
+		float[] z = this.z.removeLast();
+		float[] r = this.r.removeLast();
+
+		float[] derivative = activation.derivative(hc);
+		float[] dzActivation = outputActivation.derivative(z);
+		float[] drActivation = outputActivation.derivative(r);
+
+		IntStream.range(0, batchSize).parallel().forEach(b -> {
+			for (int i = 0; i < outputSize; i++) {
+				int index = i + outputSize * b;
+
+				dh[index] += previousDelta[index];
+				dhc[index] = dh[index] * (1 - z[index]) * derivative[index];
+			}
+		});
+
+		float[] delta = GPU.sgemm(CLBlastTranspose.CLBlastTransposeNo, CLBlastTranspose.CLBlastTransposeNo, batchSize,
+			outputSize + inputSize, outputSize, dhc, outputSize, wh, outputSize + inputSize,
+			new float[batchSize * (outputSize + inputSize)], outputSize + inputSize);
+
+		for (int b = 0; b < batchSize; b++) {
+			for (int i = 0; i < outputSize; i++) {
+				int index = i + outputSize * b;
+				int inputIndex = (inputSize + i) + (inputSize + outputSize) * b;
+
+				dr[index] = xh[inputIndex] * delta[inputIndex] * drActivation[index];
+				dz[index] = dh[index] * (xh[inputIndex] - hc[index]) * dzActivation[index];
+
+				delta[inputIndex] = dh[index] * z[index] + r[index] * delta[inputIndex];
+			}
+		}
+
+		delta = GPU.sgemm(CLBlastTranspose.CLBlastTransposeNo, CLBlastTranspose.CLBlastTransposeNo, batchSize, outputSize + inputSize,
+			outputSize, dz, outputSize, wz, outputSize + inputSize, delta, outputSize + inputSize);
+		delta = GPU.sgemm(CLBlastTranspose.CLBlastTransposeNo, CLBlastTranspose.CLBlastTransposeNo, batchSize, outputSize + inputSize,
+			outputSize, dr, outputSize, wr, outputSize + inputSize, delta, outputSize + inputSize);
+
+		for (int b = 0; b < batchSize; b++) {
+			System.arraycopy(delta, (inputSize + outputSize) * b, dx, inputSize * b, inputSize);
+			System.arraycopy(delta, inputSize + (inputSize + outputSize) * b, dh, outputSize * b, outputSize);
+		}
+
+		dWr = GPU.sgemm(CLBlastTranspose.CLBlastTransposeYes, CLBlastTranspose.CLBlastTransposeNo, outputSize,
+			inputSize + outputSize, batchSize, dr, outputSize, xh, inputSize + outputSize, dWr, inputSize + outputSize);
+		dWz = GPU.sgemm(CLBlastTranspose.CLBlastTransposeYes, CLBlastTranspose.CLBlastTransposeNo, outputSize,
+			inputSize + outputSize, batchSize, dz, outputSize, xh, inputSize + outputSize, dWz, inputSize + outputSize);
+		dWh = GPU.sgemm(CLBlastTranspose.CLBlastTransposeYes, CLBlastTranspose.CLBlastTransposeNo, outputSize,
+			inputSize + outputSize, batchSize, dhc, outputSize, xrh, inputSize + outputSize, dWh, inputSize + outputSize);
+
+		IntStream.range(0, batchSize).parallel().forEach(b -> {
+			for (int i = 0; i < outputSize; i++) {
+				int index = i + outputSize * b;
+
+				dBr[i] += dr[index];
+				dBz[i] += dz[index];
+				dBh[i] += dhc[index];
+			}
+		});
+
+		return dx;
+	}
+
+	public float[][][] getParameters() {
+		return new float[][][]{{wz, dWz}, {wr, dWr}, {wh, dWh}, {bz, dBz}, {br, dBr}, {bh, dBh}};
+	}
+
+	public void update(int size) {
+		int position = 0;
+
+		for (int i = 0; i < outputSize * inputSize + outputSize * outputSize; i++) {
+			wz[i] += Math.max(Math.min(updaters[position++].update(dWz[i] / (size)), 1), -1);
+			wr[i] += Math.max(Math.min(updaters[position++].update(dWr[i] / (size)), 1), -1);
+			wh[i] += Math.max(Math.min(updaters[position++].update(dWh[i] / (size)), 1), -1);
+		}
+
+		for (int i = 0; i < outputSize; i++) {
+			br[i] += Math.max(Math.min(updaters[position++].update(dBr[i] / (size)), 1), -1);
+			bz[i] += Math.max(Math.min(updaters[position++].update(dBz[i] / (size)), 1), -1);
+			bh[i] += Math.max(Math.min(updaters[position++].update(dBh[i] / (size)), 1), -1);
+		}
+
+		transposeWeights();
+
+		h = null;
 
 		dWz = new float[outputSize * inputSize + outputSize * outputSize];
 		dWr = new float[outputSize * inputSize + outputSize * outputSize];
@@ -242,96 +408,7 @@ public class GRU implements Layer {
 		dBr = new float[outputSize];
 		dBh = new float[outputSize];
 
-		// these variable represent before-activation derivatives
-		float[] dh = new float[batchSize * outputSize];
-		float[] dr = new float[batchSize * outputSize];
-		float[] dz = new float[batchSize * outputSize];
-		float[] dhc = new float[batchSize * outputSize];
-
-		for (int t = xh.length - 1; t >= 0; t--) {
-			float[] derivative = activation.derivative(hc[t]);
-			float[] dzActivation = outputActivation.derivative(z[t]);
-			float[] drActivation = outputActivation.derivative(r[t]);
-
-			for (int b = 0; b < batchSize; b++) {
-				for (int i = 0; i < outputSize; i++) {
-					int index = i + outputSize * b;
-
-					dh[index] += previousDelta[t][index];
-					dhc[index] = dh[index] * (1 - z[t][index]) * derivative[index];
-				}
-			}
-
-			float[] delta = GPU.sgemm(CLBlastTranspose.CLBlastTransposeNo, CLBlastTranspose.CLBlastTransposeNo, batchSize,
-				outputSize + inputSize,
-				outputSize, dhc, outputSize, wh, outputSize + inputSize, new float[batchSize * (outputSize + inputSize)],
-				outputSize + inputSize);
-
-			for (int b = 0; b < batchSize; b++) {
-				for (int i = 0; i < outputSize; i++) {
-					int index = i + outputSize * b;
-					int inputIndex = (inputSize + i) + (inputSize + outputSize) * b;
-
-					dr[index] = xh[t][inputIndex] * delta[inputIndex] * drActivation[index];
-					dz[index] = dh[index] * (xh[t][inputIndex] - hc[t][index]) * dzActivation[index];
-
-					delta[inputIndex] = dh[index] * z[t][index] + r[t][index] * delta[inputIndex];
-				}
-
-			}
-
-			delta = GPU.sgemm(CLBlastTranspose.CLBlastTransposeNo, CLBlastTranspose.CLBlastTransposeNo, batchSize, outputSize + inputSize,
-				outputSize, dz, outputSize, wz, outputSize + inputSize, delta, outputSize + inputSize);
-			delta = GPU.sgemm(CLBlastTranspose.CLBlastTransposeNo, CLBlastTranspose.CLBlastTransposeNo, batchSize, outputSize + inputSize,
-				outputSize, dr, outputSize, wr, outputSize + inputSize, delta, outputSize + inputSize);
-
-			for (int b = 0; b < batchSize; b++) {
-				System.arraycopy(delta, (inputSize + outputSize) * b, dx[t], inputSize * b, inputSize);
-				System.arraycopy(delta, inputSize + (inputSize + outputSize) * b, dh, outputSize * b, outputSize);
-			}
-
-			dWr = GPU.sgemm(CLBlastTranspose.CLBlastTransposeYes, CLBlastTranspose.CLBlastTransposeNo, outputSize,
-				inputSize + outputSize, batchSize, dr, outputSize, xh[t], inputSize + outputSize, dWr, inputSize + outputSize);
-			dWz = GPU.sgemm(CLBlastTranspose.CLBlastTransposeYes, CLBlastTranspose.CLBlastTransposeNo, outputSize,
-				inputSize + outputSize, batchSize, dz, outputSize, xh[t], inputSize + outputSize, dWz, inputSize + outputSize);
-			dWh = GPU.sgemm(CLBlastTranspose.CLBlastTransposeYes, CLBlastTranspose.CLBlastTransposeNo, outputSize,
-				inputSize + outputSize, batchSize, dhc, outputSize, xrh[t], inputSize + outputSize, dWh, inputSize + outputSize);
-
-			IntStream.range(0, batchSize).parallel().forEach(b -> {
-				for (int i = 0; i < outputSize; i++) {
-					int index = i + outputSize * b;
-
-					dBr[i] += dr[index];
-					dBz[i] += dz[index];
-					dBh[i] += dhc[index];
-				}
-			});
-		}
-
-		if (mode != Mode.GRADIENT_CHECK)
-			update();
-
-		return dx;
-	}
-
-	public float[][][] getParameters() {
-		return new float[][][]{{wz, dWz}, {wr, dWr}, {wh, dWh}, {bz, dBz}, {br, dBr}, {bh, dBh}};
-	}
-
-	private void update() {
-		int position = 0;
-
-		for (int i = 0; i < outputSize * inputSize + outputSize * outputSize; i++) {
-			wz[i] += Math.max(Math.min(updaters[position++].update(dWz[i] / (xh.length * batchSize)), 1), -1);
-			wr[i] += Math.max(Math.min(updaters[position++].update(dWr[i] / (xh.length * batchSize)), 1), -1);
-			wh[i] += Math.max(Math.min(updaters[position++].update(dWh[i] / (xh.length * batchSize)), 1), -1);
-		}
-
-		for (int i = 0; i < outputSize; i++) {
-			br[i] += Math.max(Math.min(updaters[position++].update(dBr[i] / (xh.length * batchSize)), 1), -1);
-			bz[i] += Math.max(Math.min(updaters[position++].update(dBz[i] / (xh.length * batchSize)), 1), -1);
-			bh[i] += Math.max(Math.min(updaters[position++].update(dBh[i] / (xh.length * batchSize)), 1), -1);
-		}
+		y.clear();
 	}
 
 	@SuppressWarnings({"unused", "WeakerAccess"})

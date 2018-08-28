@@ -11,14 +11,32 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.Callable;
+import java.util.concurrent.LinkedBlockingQueue;
+import java.util.concurrent.ThreadPoolExecutor;
+import java.util.concurrent.TimeUnit;
 
 /**
  * Models represent neural network models. They forward and back propagate layers.
  */
 @SuppressWarnings("unused")
 public class Model {
+	private static final int CORES = Runtime.getRuntime().availableProcessors();
+	private static final ThreadPoolExecutor ES = new ThreadPoolExecutor(CORES, CORES, 0L, TimeUnit.MILLISECONDS,
+		new LinkedBlockingQueue<>(), new ThreadPoolExecutor.CallerRunsPolicy());
 	private Layer[] layers;
 	private Cost cost;
+
+	static {
+		Runtime.getRuntime().addShutdownHook(new Thread(() -> {
+			ES.shutdown();
+			try {
+				ES.awaitTermination(Long.MAX_VALUE, TimeUnit.NANOSECONDS);
+			} catch (InterruptedException e) {
+				e.printStackTrace();
+			}
+		}));
+	}
 
 	private Model(Layer[] layers, CostType costType, int[] inputDimensions) {
 		this.layers = layers;
@@ -75,8 +93,8 @@ public class Model {
 	 *
 	 * @param target the target
 	 */
-	private void backward(float[][] target) {
-		float[][] delta = layers[layers.length - 1].backward(cost, target);
+	private void backward(float[] target) {
+		float[] delta = layers[layers.length - 1].backward(cost, target);
 
 		for (int i = layers.length - 2; i >= 0; i--)
 			delta = layers[i].backward(delta);
@@ -88,7 +106,7 @@ public class Model {
 	 * @param x the input
 	 * @return the output
 	 */
-	public float[][] forward(float[][] x, int batchSize) {
+	public float[] forward(float[] x, int batchSize) {
 		for (Layer layer : layers)
 			x = layer.forward(x, batchSize);
 
@@ -158,15 +176,85 @@ public class Model {
 				}
 
 				// forward propagating the batch
-				float[] out = forward(new float[][]{inputs}, s)[0];
+				float[] out = forward(inputs, s);
 
 				// back propagating batch
-				backward(new float[][]{targets});
+				backward(targets);
+
+				update(s);
 
 				plot.update(x++, cost.cost(out, targets) / s, i, batch, j);
 				if (batch % interval == 0)
 					export(name);
 			}
+		}
+	}
+
+	private void update(int size) {
+		for (Layer layer : layers)
+			layer.update(size);
+	}
+
+	private float[][] forward(float[][] x, int batchSize) {
+		List<Callable<Void>> tasks = new ArrayList<>();
+
+		for (int i = 0; i < x.length + layers.length - 1; i++) {
+			for (int j = 0; j < layers.length && (i - j) >= 0; j++) {
+				if (i - j < x.length) {
+					final int index = i;
+					final int current = j;
+
+					tasks.add(() -> {
+						x[index - current] = layers[current].forward(x[index - current], batchSize);
+						return null;
+					});
+				}
+			}
+
+			try {
+				ES.invokeAll(tasks);
+			} catch (InterruptedException e) {
+				e.printStackTrace();
+			}
+
+			tasks.clear();
+		}
+
+		return x;
+	}
+
+	private void backward(float[][] targets) {
+		float[][] delta = new float[targets.length][];
+
+		List<Callable<Void>> tasks = new ArrayList<>();
+		for (int i = targets.length - 1; i > -layers.length; i--) {
+			if (i >= 0) {
+				final int index = i;
+				tasks.add(() -> {
+					delta[index] = layers[layers.length - 1].backward(cost, targets[index]);
+					return null;
+				});
+			}
+
+			for (int j = i + 1, k = layers.length - 2; j < targets.length && k >= 0; j++, k--) {
+				final int index = j;
+				final int current = k;
+
+				if (j >= 0) {
+					tasks.add(() -> {
+						delta[index] = layers[current].backward(delta[index]);
+						return null;
+					});
+				}
+			}
+
+			try {
+				ES.invokeAll(tasks);
+			} catch (InterruptedException e) {
+				e.printStackTrace();
+			}
+
+			tasks.clear();
 		}
 	}
 
@@ -236,16 +324,17 @@ public class Model {
 
 				if (inputs != null && targets != null) {
 					// forward propagating the batch
-					float[][] out = forward(inputs, s);
+					float[][] output = forward(inputs, s);
 
 					// back propagating batch
 					backward(targets);
+					update(s * output.length);
 
 					float error = 0;
-					for (int k = 0; k < out.length; k++)
-						error += cost.cost(out[k], targets[k]);
+					for (int k = 0; k < output.length; k++)
+						error += cost.cost(output[k], targets[k]);
 
-					plot.update(x++, error / (s * out.length), i, batch, j);
+					plot.update(x++, error / (s * output.length), i, batch, j);
 					if (batch % interval == 0)
 						export(name);
 				}
@@ -263,7 +352,7 @@ public class Model {
 	 * @param input  the input
 	 * @param target the target
 	 */
-	public boolean gradientCheck(float[][] input, float[][] target, int batchSize) {
+	public boolean gradientCheck(float[] input, float[] target, int batchSize) {
 		setMode(Layer.Mode.GRADIENT_CHECK);
 
 		forward(input, batchSize);
@@ -284,7 +373,7 @@ public class Model {
 		return pass;
 	}
 
-	private boolean checkParameters(float[] parameters, float[] gradient, float[][] input, float[][] target, int batchSize) {
+	private boolean checkParameters(float[] parameters, float[] gradient, float[] input, float[] target, int batchSize) {
 		double epsilon = 1e-2;
 		double numerator = 0, denominator = 0;
 
@@ -293,19 +382,15 @@ public class Model {
 		for (int i = 0; i < parameters.length; i++) {
 			parameters[i] += epsilon;
 
-			float[][] y = forward(input, batchSize);
+			float[] y = forward(input, batchSize);
 
-			float plus = 0;
-			for (int j = 0; j < y.length; j++)
-				plus += cost.cost(y[j], target[j]);
+			float plus = cost.cost(y, target);
 
 			parameters[i] -= 2 * epsilon;
 
 			y = forward(input, batchSize);
 
-			float minus = 0;
-			for (int j = 0; j < y.length; j++)
-				minus += cost.cost(y[j], target[j]);
+			float minus = cost.cost(y, target);
 
 			parameters[i] += epsilon;
 

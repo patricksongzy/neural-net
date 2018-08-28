@@ -80,17 +80,17 @@ class ConvolutionalTest {
 		Convolutional convolutional = new Convolutional.Builder().filterAmount(1).activationType(ActivationType.RELU).filterSize(3)
 				.initializer(new HeInitialization()).pad(2).stride(2).updaterType(UpdaterType.ADAM).build();
 		convolutional.setDimensions(3, 3, 1);
-		float[][] input = new float[][]{
+		float[] input = new float[]
 				{2, 1, 0,
 				2, 0, 1,
-				1, 2, 0,}};
+					1, 2, 0,};
 
 		float[] updated = new float[]{2, 1, 3, 1, 2, 1, 3, 1, 1};
 		for (int i = 0; i < convolutional.getParameters()[0][0].length; i++) {
 			convolutional.getParameters()[0][0][i] = updated[i];
 		}
 
-		assertArrayEquals(new float[][]{{2, 7, 0, 9, 13, 1, 3, 4, 0}}, convolutional.forward(input, 1));
+		assertArrayEquals(new float[]{2, 7, 0, 9, 13, 1, 3, 4, 0}, convolutional.forward(input, 1));
 	}
 
 	@Test
@@ -108,6 +108,6 @@ class ConvolutionalTest {
 			target[i] = ThreadLocalRandom.current().nextFloat();
 		}
 
-		assertTrue(model.gradientCheck(new float[][]{input}, new float[][]{target}, 1));
+		assertTrue(model.gradientCheck(input, target, 1));
 	}
 }

@@ -40,7 +40,7 @@ public interface Layer {
 	 * @param batchSize the batch size
 	 * @return the output
 	 */
-	float[][] forward(float[][] input, int batchSize);
+	float[] forward(float[] input, int batchSize);
 
 	/**
 	 * Back propagation of an output layer.
@@ -49,7 +49,7 @@ public interface Layer {
 	 * @param targets the target outputs
 	 * @return the delta
 	 */
-	float[][] backward(Cost cost, float[][] targets);
+	float[] backward(Cost cost, float[] targets);
 
 	/**
 	 * Back propagation of a hidden layer, given the layer that was back propagated before.
@@ -57,7 +57,9 @@ public interface Layer {
 	 * @param previousDelta the previous delta
 	 * @return the delta
 	 */
-	float[][] backward(float[][] previousDelta);
+	float[] backward(float[] previousDelta);
+
+	void update(int size);
 
 	/**
 	 * Gets the output dimensions, for initializing following layers.

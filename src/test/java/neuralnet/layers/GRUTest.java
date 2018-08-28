@@ -17,10 +17,10 @@ class GRUTest {
 		model.export("src/test/resources/gru-import-test.model");
 		model = new Model("src/test/resources/gru-import-test.model");
 
-		assertTrue(model.gradientCheck(new float[][]{{0.3f, 0.7f,
+		assertTrue(model.gradientCheck(new float[]{0.3f, 0.7f,
 			0.5f, 0.6f
-		}}, new float[][]{{0.2f, 0.3f, 0.6f, 0.1f, 0.8f,
+		}, new float[]{0.2f, 0.3f, 0.6f, 0.1f, 0.8f,
 			0.8f, 0.7f, 0.5f, 0.6f, 0.2f
-		}}, 2));
+		}, 2));
 	}
 }
