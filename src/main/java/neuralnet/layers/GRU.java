@@ -332,9 +332,8 @@ public class GRU implements Layer {
 		});
 
 		float[] delta = GPU.sgemm(CLBlastTranspose.CLBlastTransposeNo, CLBlastTranspose.CLBlastTransposeNo, batchSize,
-			outputSize + inputSize,
-			outputSize, dhc, outputSize, wh, outputSize + inputSize, new float[batchSize * (outputSize + inputSize)],
-			outputSize + inputSize);
+			outputSize + inputSize, outputSize, dhc, outputSize, wh, outputSize + inputSize,
+			new float[batchSize * (outputSize + inputSize)], outputSize + inputSize);
 
 		for (int b = 0; b < batchSize; b++) {
 			for (int i = 0; i < outputSize; i++) {
