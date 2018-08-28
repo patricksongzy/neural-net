@@ -33,7 +33,7 @@ public class FeedForward implements Layer {
 	private Updater[] biasUpdaters;
 	private float[] weights, biases;
 	private float[] gradient, biasGradient;
-	private float[][] input, output;
+	private float[] input, output;
 
 	/**
 	 * Initializes a FeedForward layer neural network from a file.
@@ -52,6 +52,8 @@ public class FeedForward implements Layer {
 		biasUpdaters = new Updater[outputSize];
 		weights = new float[outputSize * inputSize];
 		weightUpdaters = new Updater[outputSize * inputSize];
+		biasGradient = new float[outputSize];
+		gradient = new float[outputSize * inputSize];
 
 		for (int i = 0; i < outputSize; i++) {
 			biases[i] = dis.readFloat();
@@ -104,6 +106,8 @@ public class FeedForward implements Layer {
 		biasUpdaters = new Updater[outputSize];
 		weights = new float[outputSize * inputSize];
 		weightUpdaters = new Updater[outputSize * inputSize];
+		biasGradient = new float[outputSize];
+		gradient = new float[outputSize * inputSize];
 
 		for (int i = 0; i < outputSize; i++) {
 			biasUpdaters[i] = updaterType.create();
@@ -121,98 +125,82 @@ public class FeedForward implements Layer {
 		return new float[][][]{{weights, gradient}, {biases, biasGradient}};
 	}
 
-	public float[][] forward(float[][] input, int batchSize) {
+	public float[] forward(float[] input, int batchSize) {
 		this.batchSize = batchSize;
 		this.input = input;
 
-		output = new float[input.length][batchSize * outputSize];
+		output = new float[batchSize * outputSize];
 
-		for (int t = 0; t < input.length; t++) {
-			for (int b = 0; b < batchSize; b++)
-				System.arraycopy(biases, 0, output[t], b * outputSize, outputSize);
+		for (int b = 0; b < batchSize; b++)
+			System.arraycopy(biases, 0, output, b * outputSize, outputSize);
 
-			output[t] = GPU.sgemm(CLBlastTranspose.CLBlastTransposeNo, CLBlastTranspose.CLBlastTransposeYes, batchSize,
-				outputSize, inputSize, input[t], inputSize, weights, inputSize, output[t], outputSize);
+		output = GPU.sgemm(CLBlastTranspose.CLBlastTransposeNo, CLBlastTranspose.CLBlastTransposeYes, batchSize,
+			outputSize, inputSize, input, inputSize, weights, inputSize, output, outputSize);
 
-			if (mode == Mode.EVAL && temperature != 1) {
-				for (int i = 0; i < batchSize; i++) {
-					output[t][i] /= temperature;
-				}
+		if (mode == Mode.EVAL && temperature != 1) {
+			for (int i = 0; i < batchSize; i++) {
+				output[i] /= temperature;
 			}
-
-			// activating output
-			activation.activation(output[t], batchSize);
 		}
+
+		// activating output
+		activation.activation(output, batchSize);
 
 		return output;
 	}
 
-	public float[][] backward(Cost cost, float[][] target) {
-		float[][] previousDelta = new float[output.length][];
+	public float[] backward(Cost cost, float[] target) {
+		float[] previousDelta;
 
-		for (int t = 0; t < output.length; t++) {
-			if (activation.getType() == Activation.Type.SOFTMAX)
-				previousDelta[t] = cost.derviativeSoftmax(output[t], target[t], batchSize);
-			else
-				previousDelta[t] = cost.derivative(output[t], target[t], batchSize);
-		}
+		if (activation.getType() == Activation.Type.SOFTMAX)
+			previousDelta = cost.derviativeSoftmax(output, target, batchSize);
+		else
+			previousDelta = cost.derivative(output, target, batchSize);
 
 		return backward(previousDelta);
 	}
 
-	public float[][] backward(float[][] previousDelta) {
-		biasGradient = new float[outputSize];
+	public float[] backward(float[] previousDelta) {
+		output = activation.derivative(output);
 
-		gradient = new float[outputSize * inputSize];
+		for (int b = 0; b < batchSize; b++) {
+			for (int i = 0; i < outputSize; i++) {
+				int index = i + outputSize * b;
 
-		for (int t = 0; t < output.length; t++) {
-			output[t] = activation.derivative(output[t]);
+				if (activation.getType() != Activation.Type.SOFTMAX)
+					previousDelta[index] *= output[index];
 
-			for (int b = 0; b < batchSize; b++) {
-				for (int i = 0; i < outputSize; i++) {
-					int index = i + outputSize * b;
-
-					if (activation.getType() != Activation.Type.SOFTMAX)
-						previousDelta[t][index] *= output[t][index];
-
-					biasGradient[i] += previousDelta[t][index];
-				}
+				biasGradient[i] += previousDelta[index];
 			}
-
-			gradient = GPU.sgemm(CLBlastTranspose.CLBlastTransposeYes, CLBlastTranspose.CLBlastTransposeNo, outputSize,
-				inputSize, batchSize, previousDelta[t], outputSize, input[t], inputSize, gradient, inputSize);
 		}
 
-		if (mode != Mode.GRADIENT_CHECK) {
-			// updating parameters
-			update(gradient);
-		}
+		gradient = GPU.sgemm(CLBlastTranspose.CLBlastTransposeYes, CLBlastTranspose.CLBlastTransposeNo, outputSize,
+			inputSize, batchSize, previousDelta, outputSize, input, inputSize, gradient, inputSize);
 
-		float[][] delta = new float[output.length][batchSize * inputSize];
+		float[] delta = new float[batchSize * inputSize];
 
-		for (int t = 0; t < output.length; t++) {
-			delta[t] = GPU.sgemm(CLBlastTranspose.CLBlastTransposeNo, CLBlastTranspose.CLBlastTransposeNo, batchSize,
-				inputSize, outputSize, previousDelta[t], outputSize, weights, inputSize, delta[t], inputSize);
-		}
+		delta = GPU.sgemm(CLBlastTranspose.CLBlastTransposeNo, CLBlastTranspose.CLBlastTransposeNo, batchSize,
+			inputSize, outputSize, previousDelta, outputSize, weights, inputSize, delta, inputSize);
 
 		return delta;
 	}
 
 	/**
 	 * Updates parameters given gradients.
-	 *
-	 * @param gradient the weight gradient
 	 */
-	private void update(float[] gradient) {
+	public void update(int size) {
 		IntStream.range(0, outputSize).parallel().forEach(i -> {
-			biases[i] += biasUpdaters[i].update(biasGradient[i] / (batchSize * output.length));
+			biases[i] += biasUpdaters[i].update(biasGradient[i] / size);
 
 			for (int j = 0; j < inputSize; j++) {
 				int k = j + inputSize * i;
 
-				weights[k] += weightUpdaters[k].update(gradient[k] / (batchSize * output.length));
+				weights[k] += weightUpdaters[k].update(gradient[k] / size);
 			}
 		});
+
+		biasGradient = new float[outputSize];
+		gradient = new float[outputSize * inputSize];
 	}
 
 	public void export(DataOutputStream dos) throws IOException {
