@@ -303,7 +303,7 @@ public class Model {
 					float[][] key = keys.get(b + j);
 					float[] value = data.get(key);
 
-					for (int k = 0, time = 1; k < key.length; k += batchSize, time++) {
+					for (int k = 0, time = 1; k < key.length; k += bpttSize, time++) {
 						float error = 0;
 
 						int bptt = (k + bpttSize) > key.length ? (key.length % bpttSize) : bpttSize;
