@@ -15,19 +15,19 @@ public interface Cost {
 	 * This method calculates the cost.
 	 *
 	 * @param out the neural network output
-	 * @param target the target
+	 * @param targets the targets
 	 * @return the cost
 	 */
-	float cost(float[] out, float[] target);
+	float cost(float[] out, float[] targets);
 
 	/**
 	 * This method calculates the derivative of the cost.
 	 *
 	 * @param output the neural network output
-	 * @param target the target
+	 * @param targets the targets
 	 * @return the derivative of cost
 	 */
-	float[] derivative(float[] output, float[] target, int batchSize);
+	float[] derivative(float[] output, float[] targets, int batchSize);
 
-	float[] derviativeSoftmax(float[] output, float[] target, int batchSize);
+	float[] derviativeSoftmax(float[] output, float[] targets, int batchSize);
 }

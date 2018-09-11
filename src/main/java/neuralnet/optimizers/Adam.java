@@ -1,30 +1,44 @@
 package neuralnet.optimizers;
 
+import neuralnet.GPU;
+
 import java.io.DataInputStream;
 import java.io.DataOutputStream;
 import java.io.IOException;
+import java.util.stream.IntStream;
 
 /**
  * The ADAM updater stores <code>m</code> and <code>v</code> as parameters for each layer. Although other updaters may outperform ADAM,
  * ADAM is commonly used, due to the fact that it works well without adjusting any hyper-parameters.
  */
 public class Adam implements Updater {
-	private static double beta1 = 0.9f;
-	private static double beta2 = 0.999f;
-	private static double epsilon = 1e-8f;
-	private static double learningRate = 0.0001f;
+	private static float beta1 = 0.9f;
+	private static float beta2 = 0.999f;
+	private static float epsilon = 1e-8f;
+	private static float learningRate = 0.0001f;
 
+	private int size;
 	private int t = 0;
-	private double m = 0, v = 0;
+	private float[] m, v;
 
-	public Adam() {
+	public Adam(int size) {
+		this.size = size;
 
+		m = new float[size];
+		v = new float[size];
 	}
 
 	public Adam(DataInputStream dis) throws IOException {
+		size = dis.readInt();
 		t = dis.readInt();
-		m = dis.readDouble();
-		v = dis.readDouble();
+
+		m = new float[size];
+		v = new float[size];
+
+		for (int i = 0; i < size; i++) {
+			m[i] = dis.readFloat();
+			v[i] = dis.readFloat();
+		}
 	}
 
 	/**
@@ -33,26 +47,16 @@ public class Adam implements Updater {
 	 * @param learningRate the learning rate
 	 */
 	@SuppressWarnings("unused")
-	public static void init(double learningRate) {
+	public static void init(float learningRate) {
 		Adam.learningRate = learningRate;
 	}
 
 	@SuppressWarnings("unused")
-	public static void init(double beta1, double beta2, double epsilon, double learningRate) {
+	public static void init(float beta1, float beta2, float epsilon, float learningRate) {
 		Adam.beta1 = beta1;
 		Adam.beta2 = beta2;
 		Adam.epsilon = epsilon;
 		Adam.learningRate = learningRate;
-	}
-
-	public double update(double gradient) {
-		t++;
-
-		m = beta1 * m + (1 - beta1) * gradient;
-		double mt = m / (1 - Math.pow(beta1, t));
-		v = beta2 * v + (1 - beta2) * Math.pow(gradient, 2);
-		double vt = v / (1 - Math.pow(beta2, t));
-		return -learningRate * (mt / (Math.sqrt(vt) + epsilon));
 	}
 
 	/**
@@ -61,10 +65,10 @@ public class Adam implements Updater {
 	 * @param dis the input stream
 	 */
 	static void importParameters(DataInputStream dis) throws IOException {
-		beta1 = dis.readDouble();
-		beta2 = dis.readDouble();
-		epsilon = dis.readDouble();
-		learningRate = dis.readDouble();
+		beta1 = dis.readFloat();
+		beta2 = dis.readFloat();
+		epsilon = dis.readFloat();
+		learningRate = dis.readFloat();
 	}
 
 	/**
@@ -73,15 +77,41 @@ public class Adam implements Updater {
 	 * @param dos the output stream
 	 */
 	static void exportParameters(DataOutputStream dos) throws IOException {
-		dos.writeDouble(beta1);
-		dos.writeDouble(beta2);
-		dos.writeDouble(epsilon);
-		dos.writeDouble(learningRate);
+		dos.writeFloat(beta1);
+		dos.writeFloat(beta2);
+		dos.writeFloat(epsilon);
+		dos.writeFloat(learningRate);
+	}
+
+	public float[] update(float[] gradient) {
+		t++;
+		float[] update = new float[size];
+
+		float b1 = 1 - beta1;
+		float b2 = 1 - beta2;
+
+		float mt = 1 - (float) Math.pow(beta1, t);
+		float vt = 1 - (float) Math.pow(beta2, t);
+
+		m = GPU.saxpy(size, beta1, m, GPU.saxpy(size, b1, gradient, new float[size]));
+
+		float[] bv = GPU.saxpy(size, beta2, v, new float[size]);
+
+		IntStream.range(0, size).parallel().forEach(i -> {
+			v[i] = bv[i] + b2 * gradient[i] * gradient[i];
+			update[i] = (float) -((learningRate * (m[i] / mt)) / (Math.sqrt(v[i] / vt) + epsilon));
+		});
+
+		return update;
 	}
 
 	public void export(DataOutputStream dos) throws IOException {
+		dos.writeInt(size);
 		dos.writeInt(t);
-		dos.writeDouble(m);
-		dos.writeDouble(v);
+
+		for (int i = 0; i < size; i++) {
+			dos.writeFloat(m[i]);
+			dos.writeFloat(v[i]);
+		}
 	}
 }

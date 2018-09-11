@@ -14,16 +14,16 @@ public enum CostType implements Cost {
 			return CostType.CROSS_ENTROPY;
 		}
 
-		public float cost(float[] out, float[] target) {
-			return (float) -IntStream.range(0, target.length).parallel().mapToDouble(i -> (target[i] * Math.log(out[i] + 1e-16))).sum();
+		public float cost(float[] out, float[] targets) {
+			return (float) -IntStream.range(0, targets.length).parallel().mapToDouble(i -> (targets[i] * Math.log(out[i] + 1e-16))).sum();
 		}
 
-		public float[] derivative(float[] output, float[] target, int batchSize) {
+		public float[] derivative(float[] output, float[] targets, int batchSize) {
 			int size = output.length / batchSize;
 
 			if (batchSize <= 0)
 				throw new IllegalArgumentException("Batch size must be > 0.");
-			if (output.length < (size - 1) + size * (batchSize - 1) || output.length != target.length)
+			if (output.length < (size - 1) + size * (batchSize - 1) || output.length != targets.length)
 				throw new IllegalArgumentException("Invalid array lengths.");
 
 			float[] delta = new float[output.length];
@@ -32,19 +32,19 @@ public enum CostType implements Cost {
 				for (int i = 0; i < size; i++) {
 					int index = i + size * b;
 
-					delta[i + size * b] = (-target[index] / output[index]);
+					delta[i + size * b] = (-targets[index] / output[index]);
 				}
 			});
 
 			return delta;
 		}
 
-		public float[] derviativeSoftmax(float[] output, float[] target, int batchSize) {
+		public float[] derviativeSoftmax(float[] output, float[] targets, int batchSize) {
 			int size = output.length / batchSize;
 
 			if (batchSize <= 0)
 				throw new IllegalArgumentException("Batch size must be > 0.");
-			if (output.length < (size - 1) + size * (batchSize - 1) || output.length != target.length)
+			if (output.length < (size - 1) + size * (batchSize - 1) || output.length != targets.length)
 				throw new IllegalArgumentException("Invalid array lengths.");
 
 			float[] delta = new float[output.length];
@@ -53,7 +53,7 @@ public enum CostType implements Cost {
 				for (int i = 0; i < size; i++) {
 					int index = i + size * b;
 
-					delta[index] = (output[index] - target[index]);
+					delta[index] = (output[index] - targets[index]);
 				}
 			});
 
@@ -64,16 +64,16 @@ public enum CostType implements Cost {
 			return CostType.MEAN_SQUARE_ERROR;
 		}
 
-		public float cost(float[] output, float[] target) {
-			if (output.length != target.length)
+		public float cost(float[] output, float[] targets) {
+			if (output.length != targets.length)
 				throw new IllegalArgumentException("Invalid array lengths.");
 
-			float cost = (float) IntStream.range(0, target.length).parallel().mapToDouble(i -> Math.pow(target[i] - output[i], 2)).sum();
+			float cost = (float) IntStream.range(0, targets.length).parallel().mapToDouble(i -> Math.pow(targets[i] - output[i], 2)).sum();
 
 			return 0.5f * cost;
 		}
 
-		public float[] derivative(float[] output, float[] target, int batchSize) {
+		public float[] derivative(float[] output, float[] targets, int batchSize) {
 			int size = output.length / batchSize;
 
 			if (batchSize <= 0)
@@ -87,14 +87,14 @@ public enum CostType implements Cost {
 				for (int i = 0; i < size; i++) {
 					int index = i + size * b;
 
-					delta[index] = output[index] - target[index];
+					delta[index] = output[index] - targets[index];
 				}
 			});
 
 			return delta;
 		}
 
-		public float[] derviativeSoftmax(float[] output, float[] target, int batchSize) {
+		public float[] derviativeSoftmax(float[] output, float[] targets, int batchSize) {
 			throw new UnsupportedOperationException();
 		}
 	}, SPARSE_CROSS_ENTROPY {
@@ -102,38 +102,38 @@ public enum CostType implements Cost {
 			return CostType.SPARSE_CROSS_ENTROPY;
 		}
 
-		public float cost(float[] output, float[] target) {
-			int size = output.length / target.length;
+		public float cost(float[] output, float[] targets) {
+			int size = output.length / targets.length;
 
-			if (output.length < (size - 1) + size * (target.length - 1))
+			if (output.length < (size - 1) + size * (targets.length - 1))
 				throw new IllegalArgumentException("Invalid array lengths.");
 
 			float cost = 0;
-			for (int b = 0; b < target.length; b++) {
-				if (target[b] > output.length)
+			for (int b = 0; b < targets.length; b++) {
+				if (targets[b] > output.length)
 					throw new IllegalArgumentException("Invalid target.");
 
-				cost += Math.log(output[(int) target[b] + size * b] + 1e-16);
+				cost += Math.log(output[(int) targets[b] + size * b] + 1e-16);
 			}
 
 			return -cost;
 		}
 
-		public float[] derivative(float[] output, float[] target, int batchSize) {
+		public float[] derivative(float[] output, float[] targets, int batchSize) {
 			int size = output.length / batchSize;
 
 			if (batchSize <= 0)
 				throw new IllegalArgumentException("Batch size must be > 0.");
-			if (output.length < (size - 1) + size * (batchSize - 1) || output.length != target.length)
+			if (output.length < (size - 1) + size * (batchSize - 1) || output.length != targets.length)
 				throw new IllegalArgumentException("Invalid array lengths.");
 
 			float[] delta = new float[output.length];
 
 			IntStream.range(0, batchSize).parallel().forEach(b -> {
-				if (target[b] > output.length)
-					throw new IllegalArgumentException("Invalid target.");
+				if (targets[b] > output.length)
+					throw new IllegalArgumentException("Invalid targets.");
 
-				int index = (int) target[b] + size * b;
+				int index = (int) targets[b] + size * b;
 
 				delta[index] = -1 / output[index];
 			});
@@ -141,7 +141,7 @@ public enum CostType implements Cost {
 			return delta;
 		}
 
-		public float[] derviativeSoftmax(float[] output, float[] target, int batchSize) {
+		public float[] derviativeSoftmax(float[] output, float[] targets, int batchSize) {
 			int size = output.length / batchSize;
 
 			if (batchSize <= 0)
@@ -152,7 +152,7 @@ public enum CostType implements Cost {
 			float[] delta = new float[output.length];
 
 			IntStream.range(0, batchSize).parallel().forEach(b -> {
-				int index = (int) target[b] + size * b;
+				int index = (int) targets[b] + size * b;
 
 				System.arraycopy(output, size * b, delta, size * b, size);
 				delta[index] -= 1;

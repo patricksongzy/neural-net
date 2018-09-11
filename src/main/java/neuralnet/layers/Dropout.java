@@ -33,6 +33,8 @@ public class Dropout implements Layer {
 
 	public void setDimensions(int... dimensions) {
 		inputSize = dimensions[0];
+		for (int i = 1; i < dimensions.length; i++)
+			inputSize *= dimensions[i];
 	}
 
 	public void setMode(Mode mode) {

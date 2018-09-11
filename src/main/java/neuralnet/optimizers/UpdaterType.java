@@ -29,10 +29,10 @@ public enum UpdaterType {
 	 *
 	 * @return an instance of the current UpdaterType
 	 */
-	public Updater create() {
+	public Updater create(int size) {
 		switch (this) {
 			default:
-				return new Adam();
+				return new Adam(size);
 		}
 	}
 

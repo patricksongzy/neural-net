@@ -2,7 +2,6 @@ package neuralnet.layers;
 
 import neuralnet.Model;
 import neuralnet.activations.ActivationType;
-import neuralnet.activations.OutputActivationType;
 import neuralnet.costs.CostType;
 import org.junit.jupiter.api.Test;
 
@@ -30,7 +29,7 @@ class FeedForwardTest {
 		// just a regular test
 		Model model = new Model.Builder()
 			.add(new FeedForward.Builder().outputSize(5).activation(ActivationType.SIGMOID).build())
-			.add(new FeedForward.Builder().outputSize(5).activation(OutputActivationType.SOFTMAX).build())
+			.add(new FeedForward.Builder().outputSize(5).activation(ActivationType.SIGMOID).build())
 			.inputDimensions(2)
 			.cost(CostType.CROSS_ENTROPY).build();
 		model.export("src/test/resources/ff-import-test.model");

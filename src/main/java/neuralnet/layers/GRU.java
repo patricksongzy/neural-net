@@ -30,11 +30,13 @@ public class GRU implements Layer {
 	private float[] dBz, dBr, dBh;
 
 	private float[] h;
+	private float[] dh;
 	private LinkedList<float[]> xh, xrh, z, r, hc, y;
 
 	private Initializer initializer;
 	private UpdaterType updaterType;
-	private Updater[] updaters;
+	private Updater[] weightUpdaters;
+	private Updater[] biasUpdaters;
 	private Activation outputActivation, activation;
 
 	private GRU(int outputSize, Initializer initializer, UpdaterType updaterType, ActivationType outputActivation,
@@ -59,8 +61,6 @@ public class GRU implements Layer {
 		inputSize = dis.readInt();
 		outputSize = dis.readInt();
 
-		updaters = new Updater[3 * outputSize * inputSize + 3 * outputSize * outputSize + 3 * outputSize];
-
 		wz = new float[outputSize * inputSize + outputSize * outputSize];
 		wr = new float[outputSize * inputSize + outputSize * outputSize];
 		wh = new float[outputSize * inputSize + outputSize * outputSize];
@@ -73,78 +73,46 @@ public class GRU implements Layer {
 		activation = Activation.fromString(dis);
 		updaterType = UpdaterType.fromString(dis);
 
-		int position = 0;
+		biasUpdaters = new Updater[3];
+		weightUpdaters = new Updater[3];
+		for (int i = 0; i < 3; i++) {
+			weightUpdaters[i] = updaterType.create(dis);
+			biasUpdaters[i] = updaterType.create(dis);
+		}
+
 		for (int i = 0; i < outputSize * inputSize + outputSize * outputSize; i++) {
 			wz[i] = dis.readFloat();
-			updaters[position++] = updaterType.create(dis);
 			wr[i] = dis.readFloat();
-			updaters[position++] = updaterType.create(dis);
 			wh[i] = dis.readFloat();
-			updaters[position++] = updaterType.create(dis);
 		}
 
 		for (int i = 0; i < outputSize; i++) {
 			bz[i] = dis.readFloat();
-			updaters[position++] = updaterType.create(dis);
 			br[i] = dis.readFloat();
-			updaters[position++] = updaterType.create(dis);
 			bh[i] = dis.readFloat();
-			updaters[position++] = updaterType.create(dis);
 		}
 
-		wzT = new float[outputSize * (inputSize + outputSize)];
-		wrT = new float[outputSize * (inputSize + outputSize)];
-		whT = new float[outputSize * (inputSize + outputSize)];
-
-		IntStream.range(0, outputSize).parallel().forEach(i -> {
-			for (int j = 0; j < inputSize + outputSize; j++) {
-				int index = j + (inputSize + outputSize) * i;
-				int transposedIndex = i + outputSize * j;
-
-				wzT[transposedIndex] = wz[index];
-				wrT[transposedIndex] = wr[index];
-				whT[transposedIndex] = wh[index];
-			}
-		});
-
-		dWz = new float[outputSize * inputSize + outputSize * outputSize];
-		dWr = new float[outputSize * inputSize + outputSize * outputSize];
-		dWh = new float[outputSize * inputSize + outputSize * outputSize];
-
-		dBz = new float[outputSize];
-		dBr = new float[outputSize];
-		dBh = new float[outputSize];
-
-		xh = new LinkedList<>();
-		xrh = new LinkedList<>();
-		hc = new LinkedList<>();
-		z = new LinkedList<>();
-		r = new LinkedList<>();
-		y = new LinkedList<>();
+		init();
 	}
 
 	public void setDimensions(int... dimensions) {
-		if (dimensions.length != 1) {
-			inputSize = 1;
-
-			for (int dimension : dimensions) {
-				inputSize *= dimension;
-			}
-		} else {
-			inputSize = dimensions[0];
-		}
+		inputSize = dimensions[0];
+		for (int i = 1; i < dimensions.length; i++)
+			inputSize *= dimensions[i];
 
 		if (inputSize <= 0)
 			throw new IllegalArgumentException("Invalid input dimensions.");
 
-		updaters = new Updater[3 * outputSize * inputSize + 3 * outputSize * outputSize + 3 * outputSize];
-
-		for (int i = 0; i < updaters.length; i++)
-			updaters[i] = updaterType.create();
-
 		wz = new float[outputSize * inputSize + outputSize * outputSize];
 		wr = new float[outputSize * inputSize + outputSize * outputSize];
 		wh = new float[outputSize * inputSize + outputSize * outputSize];
+
+		weightUpdaters = new Updater[3];
+		biasUpdaters = new Updater[3];
+		for (int i = 0; i < 3; i++) {
+			weightUpdaters[i] = updaterType.create(outputSize * inputSize + outputSize * outputSize);
+			biasUpdaters[i] = updaterType.create(outputSize);
+		}
 
 		for (int i = 0; i < outputSize * inputSize; i++) {
 			wz[i] = initializer.initialize(inputSize);
@@ -158,7 +126,10 @@ public class GRU implements Layer {
 			wh[i] = initializer.initialize(outputSize);
 		}
 
+		init();
+	}
 
+	private void init() {
 		wzT = new float[outputSize * (inputSize + outputSize)];
 		wrT = new float[outputSize * (inputSize + outputSize)];
 		whT = new float[outputSize * (inputSize + outputSize)];
@@ -206,27 +177,49 @@ public class GRU implements Layer {
 		activation.export(dos);
 		updaterType.export(dos);
 
-		int position = 0;
-
-		position = exportParameters(position, outputSize * inputSize + outputSize * outputSize, wz, wr, wh, dos);
-		exportParameters(position, outputSize, bz, br, bh, dos);
-	}
-
-	private int exportParameters(int position, int length, float[] z, float[] r, float[] p, DataOutputStream dos) throws IOException {
-		for (int i = 0; i < length; i++) {
-			dos.writeFloat(z[i]);
-			updaters[position++].export(dos);
-			dos.writeFloat(r[i]);
-			updaters[position++].export(dos);
-			dos.writeFloat(p[i]);
-			updaters[position++].export(dos);
+		for (int i = 0; i < 3; i++) {
+			weightUpdaters[i].export(dos);
+			biasUpdaters[i].export(dos);
 		}
 
-		return position;
+		exportParameters(outputSize * inputSize + outputSize * outputSize, wz, wr, wh, dos);
+		exportParameters(outputSize, bz, br, bh, dos);
+	}
+
+	private void exportParameters(int length, float[] z, float[] r, float[] h, DataOutputStream dos) throws IOException {
+		for (int i = 0; i < length; i++) {
+			dos.writeFloat(z[i]);
+			dos.writeFloat(r[i]);
+			dos.writeFloat(h[i]);
+		}
 	}
 
 	public void setMode(Mode mode) {
 		this.mode = mode;
+
+		xh.clear();
+		xrh.clear();
+		hc.clear();
+		z.clear();
+		r.clear();
+		y.clear();
+
+		if (mode == Mode.GRADIENT_CHECK) {
+			if (h != null)
+				Arrays.fill(h, 0.1f);
+			return;
+		}
+
+		h = null;
+		dh = null;
+
+		dWz = new float[outputSize * inputSize + outputSize * outputSize];
+		dWr = new float[outputSize * inputSize + outputSize * outputSize];
+		dWh = new float[outputSize * inputSize + outputSize * outputSize];
+
+		dBz = new float[outputSize];
+		dBr = new float[outputSize];
+		dBh = new float[outputSize];
 	}
 
 	public LayerType getType() {
@@ -236,13 +229,15 @@ public class GRU implements Layer {
 	public float[] forward(float[] input, int batchSize) {
 		this.batchSize = batchSize;
 
-		if (h == null)
+		if (h == null) {
 			h = new float[batchSize * outputSize];
 
-		if (mode == Mode.GRADIENT_CHECK) {
-			Arrays.fill(h, 0.1f);
-			transposeWeights();
+			if (mode == Mode.GRADIENT_CHECK)
+				Arrays.fill(h, 0.1f);
 		}
+
+		if (mode == Mode.GRADIENT_CHECK)
+			transposeWeights();
 
 		float[] xh = new float[batchSize * (inputSize + outputSize)];
 		float[] xrh = new float[batchSize * (inputSize + outputSize)];
@@ -286,19 +281,20 @@ public class GRU implements Layer {
 			}
 		}
 
-		this.xh.add(xh);
-		this.xrh.add(xrh);
-		this.hc.add(hc);
-		this.z.add(z);
-		this.r.add(r);
-		this.y.add(y);
-
 		System.arraycopy(h, 0, y, 0, batchSize * outputSize);
+
+		this.xh.push(xh);
+		this.xrh.push(xrh);
+		this.hc.push(hc);
+		this.z.push(z);
+		this.r.push(r);
+		this.y.push(y);
+
 		return y;
 	}
 
 	public float[] backward(Cost cost, float[] target) {
-		float[] dy = cost.derivative(y.removeLast(), target, batchSize);
+		float[] dy = cost.derivative(y.pop(), target, batchSize);
 
 		return backward(dy);
 	}
@@ -306,17 +302,19 @@ public class GRU implements Layer {
 	public float[] backward(float[] previousDelta) {
 		float[] dx = new float[batchSize * inputSize];
 
+		if (dh == null)
+			dh = new float[batchSize * outputSize];
+
 		// these variable represent before-activation derivatives
-		float[] dh = new float[batchSize * outputSize];
 		float[] dr = new float[batchSize * outputSize];
 		float[] dz = new float[batchSize * outputSize];
 		float[] dhc = new float[batchSize * outputSize];
 
-		float[] xh = this.xh.removeLast();
-		float[] xrh = this.xrh.removeLast();
-		float[] hc = this.hc.removeLast();
-		float[] z = this.z.removeLast();
-		float[] r = this.r.removeLast();
+		float[] xh = this.xh.pop();
+		float[] xrh = this.xrh.pop();
+		float[] hc = this.hc.pop();
+		float[] z = this.z.pop();
+		float[] r = this.r.pop();
 
 		float[] derivative = activation.derivative(hc);
 		float[] dzActivation = outputActivation.derivative(z);
@@ -357,10 +355,10 @@ public class GRU implements Layer {
 			System.arraycopy(delta, inputSize + (inputSize + outputSize) * b, dh, outputSize * b, outputSize);
 		}
 
-		dWr = GPU.sgemm(CLBlastTranspose.CLBlastTransposeYes, CLBlastTranspose.CLBlastTransposeNo, outputSize,
-			inputSize + outputSize, batchSize, dr, outputSize, xh, inputSize + outputSize, dWr, inputSize + outputSize);
 		dWz = GPU.sgemm(CLBlastTranspose.CLBlastTransposeYes, CLBlastTranspose.CLBlastTransposeNo, outputSize,
 			inputSize + outputSize, batchSize, dz, outputSize, xh, inputSize + outputSize, dWz, inputSize + outputSize);
+		dWr = GPU.sgemm(CLBlastTranspose.CLBlastTransposeYes, CLBlastTranspose.CLBlastTransposeNo, outputSize,
+			inputSize + outputSize, batchSize, dr, outputSize, xh, inputSize + outputSize, dWr, inputSize + outputSize);
 		dWh = GPU.sgemm(CLBlastTranspose.CLBlastTransposeYes, CLBlastTranspose.CLBlastTransposeNo, outputSize,
 			inputSize + outputSize, batchSize, dhc, outputSize, xrh, inputSize + outputSize, dWh, inputSize + outputSize);
 
@@ -368,8 +366,8 @@ public class GRU implements Layer {
 			for (int i = 0; i < outputSize; i++) {
 				int index = i + outputSize * b;
 
-				dBr[i] += dr[index];
 				dBz[i] += dz[index];
+				dBr[i] += dr[index];
 				dBh[i] += dhc[index];
 			}
 		});
@@ -382,23 +380,26 @@ public class GRU implements Layer {
 	}
 
 	public void update(int size) {
-		int position = 0;
+		float[] wzUpdate = weightUpdaters[0].update(dWz);
+		float[] wrUpdate = weightUpdaters[1].update(dWr);
+		float[] whUpdate = weightUpdaters[2].update(dWh);
 
-		for (int i = 0; i < outputSize * inputSize + outputSize * outputSize; i++) {
-			wz[i] += Math.max(Math.min(updaters[position++].update(dWz[i] / (size)), 1), -1);
-			wr[i] += Math.max(Math.min(updaters[position++].update(dWr[i] / (size)), 1), -1);
-			wh[i] += Math.max(Math.min(updaters[position++].update(dWh[i] / (size)), 1), -1);
-		}
+		float[] bzUpdate = biasUpdaters[0].update(dBz);
+		float[] brUpdate = biasUpdaters[1].update(dBr);
+		float[] bhUpdate = biasUpdaters[2].update(dBh);
 
-		for (int i = 0; i < outputSize; i++) {
-			br[i] += Math.max(Math.min(updaters[position++].update(dBr[i] / (size)), 1), -1);
-			bz[i] += Math.max(Math.min(updaters[position++].update(dBz[i] / (size)), 1), -1);
-			bh[i] += Math.max(Math.min(updaters[position++].update(dBh[i] / (size)), 1), -1);
-		}
+		wz = GPU.saxpy(wz.length, 1.0f / size, wzUpdate, wz);
+		wr = GPU.saxpy(wr.length, 1.0f / size, wrUpdate, wr);
+		wh = GPU.saxpy(wh.length, 1.0f / size, whUpdate, wh);
+
+		bz = GPU.saxpy(bz.length, 1.0f / size, bzUpdate, bz);
+		br = GPU.saxpy(br.length, 1.0f / size, brUpdate, br);
+		bh = GPU.saxpy(bh.length, 1.0f / size, bhUpdate, bh);
 
 		transposeWeights();
 
 		h = null;
+		dh = null;
 
 		dWz = new float[outputSize * inputSize + outputSize * outputSize];
 		dWr = new float[outputSize * inputSize + outputSize * outputSize];
@@ -408,6 +409,11 @@ public class GRU implements Layer {
 		dBr = new float[outputSize];
 		dBh = new float[outputSize];
 
+		xh.clear();
+		xrh.clear();
+		hc.clear();
+		z.clear();
+		r.clear();
 		y.clear();
 	}
 

@@ -29,8 +29,8 @@ public class FeedForward implements Layer {
 	private Initializer initializer;
 	private UpdaterType updaterType;
 	private Activation activation;
-	private Updater[] weightUpdaters;
-	private Updater[] biasUpdaters;
+	private Updater weightUpdater;
+	private Updater biasUpdater;
 	private float[] weights, biases;
 	private float[] gradient, biasGradient;
 	private float[] input, output;
@@ -48,22 +48,22 @@ public class FeedForward implements Layer {
 		activation = Activation.fromString(dis);
 		updaterType = UpdaterType.fromString(dis);
 
-		biases = new float[outputSize];
-		biasUpdaters = new Updater[outputSize];
 		weights = new float[outputSize * inputSize];
-		weightUpdaters = new Updater[outputSize * inputSize];
-		biasGradient = new float[outputSize];
+		weightUpdater = updaterType.create(dis);
+
+		biases = new float[outputSize];
+		biasUpdater = updaterType.create(dis);
+
 		gradient = new float[outputSize * inputSize];
+		biasGradient = new float[outputSize];
 
 		for (int i = 0; i < outputSize; i++) {
 			biases[i] = dis.readFloat();
-			biasUpdaters[i] = updaterType.create(dis);
 
 			for (int j = 0; j < inputSize; j++) {
 				int index = j + inputSize * i;
 
 				weights[index] = dis.readFloat();
-				weightUpdaters[index] = updaterType.create(dis);
 			}
 		}
 	}
@@ -89,34 +89,27 @@ public class FeedForward implements Layer {
 	}
 
 	public void setDimensions(int... dimensions) {
-		if (dimensions.length != 1) {
-			inputSize = 1;
-
-			for (int dimension : dimensions) {
-				inputSize *= dimension;
-			}
-		} else {
-			inputSize = dimensions[0];
-		}
+		inputSize = dimensions[0];
+		for (int i = 1; i < dimensions.length; i++)
+			inputSize *= dimensions[i];
 
 		if (inputSize <= 0)
 			throw new IllegalArgumentException("Invalid input dimensions.");
 
-		biases = new float[outputSize];
-		biasUpdaters = new Updater[outputSize];
 		weights = new float[outputSize * inputSize];
-		weightUpdaters = new Updater[outputSize * inputSize];
-		biasGradient = new float[outputSize];
+		weightUpdater = updaterType.create(weights.length);
+
+		biases = new float[outputSize];
+		biasUpdater = updaterType.create(biases.length);
+
 		gradient = new float[outputSize * inputSize];
+		biasGradient = new float[outputSize];
 
 		for (int i = 0; i < outputSize; i++) {
-			biasUpdaters[i] = updaterType.create();
-
 			for (int j = 0; j < inputSize; j++) {
 				int index = j + inputSize * i;
 
 				weights[index] = initializer.initialize(inputSize);
-				weightUpdaters[index] = updaterType.create();
 			}
 		}
 	}
@@ -163,7 +156,7 @@ public class FeedForward implements Layer {
 	public float[] backward(float[] previousDelta) {
 		output = activation.derivative(output);
 
-		for (int b = 0; b < batchSize; b++) {
+		IntStream.range(0, batchSize).parallel().forEach(b -> {
 			for (int i = 0; i < outputSize; i++) {
 				int index = i + outputSize * b;
 
@@ -172,7 +165,7 @@ public class FeedForward implements Layer {
 
 				biasGradient[i] += previousDelta[index];
 			}
-		}
+		});
 
 		gradient = GPU.sgemm(CLBlastTranspose.CLBlastTransposeYes, CLBlastTranspose.CLBlastTransposeNo, outputSize,
 			inputSize, batchSize, previousDelta, outputSize, input, inputSize, gradient, inputSize);
@@ -189,18 +182,14 @@ public class FeedForward implements Layer {
 	 * Updates parameters given gradients.
 	 */
 	public void update(int size) {
-		IntStream.range(0, outputSize).parallel().forEach(i -> {
-			biases[i] += biasUpdaters[i].update(biasGradient[i] / size);
+		float[] update = weightUpdater.update(gradient);
+		float[] biasUpdate = biasUpdater.update(biasGradient);
 
-			for (int j = 0; j < inputSize; j++) {
-				int k = j + inputSize * i;
+		weights = GPU.saxpy(weights.length, 1.0f / size, update, weights);
+		biases = GPU.saxpy(biases.length, 1.0f / size, biasUpdate, biases);
 
-				weights[k] += weightUpdaters[k].update(gradient[k] / size);
-			}
-		});
-
-		biasGradient = new float[outputSize];
 		gradient = new float[outputSize * inputSize];
+		biasGradient = new float[outputSize];
 	}
 
 	public void export(DataOutputStream dos) throws IOException {
@@ -211,15 +200,16 @@ public class FeedForward implements Layer {
 		activation.export(dos);
 		updaterType.export(dos);
 
+		weightUpdater.export(dos);
+		biasUpdater.export(dos);
+
 		for (int i = 0; i < outputSize; i++) {
 			dos.writeFloat(biases[i]);
-			biasUpdaters[i].export(dos);
 
 			for (int j = 0; j < inputSize; j++) {
 				int index = j + inputSize * i;
 
 				dos.writeFloat(weights[index]);
-				weightUpdaters[index].export(dos);
 			}
 		}
 	}

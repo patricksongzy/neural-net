@@ -5,6 +5,7 @@ import org.jocl.blast.CLBlast;
 import org.jocl.blast.CLBlastLayout;
 
 import static org.jocl.CL.*;
+import static org.jocl.blast.CLBlast.CLBlastSaxpy;
 import static org.jocl.blast.CLBlast.CLBlastSgemm;
 
 public class GPU {
@@ -138,6 +139,35 @@ public class GPU {
 		clReleaseMemObject(aBuffer);
 		clReleaseMemObject(bBuffer);
 		clReleaseMemObject(cBuffer);
+		clReleaseEvent(event);
+
+		return result;
+	}
+
+	public static float[] saxpy(int n, float alpha, float[] x, float[] y) {
+		// Create the device input buffers
+		cl_mem xBuffer = clCreateBuffer(context, CL_MEM_READ_ONLY, n
+			* Sizeof.cl_float, null, null);
+		cl_mem yBuffer = clCreateBuffer(context, CL_MEM_READ_ONLY, n
+			* Sizeof.cl_float, null, null);
+
+		// Copy the host data to the device
+		clEnqueueWriteBuffer(commandQueue, xBuffer, true, 0, n
+			* Sizeof.cl_float, Pointer.to(x), 0, null, null);
+		clEnqueueWriteBuffer(commandQueue, yBuffer, true, 0, n
+			* Sizeof.cl_float, Pointer.to(y), 0, null, null);
+
+		cl_event event = new cl_event();
+		CLBlastSaxpy(n, alpha, xBuffer, 0, 1, yBuffer, 0, 1, commandQueue, event);
+
+		// Copy the result data back to the host
+		float result[] = new float[n];
+		clEnqueueReadBuffer(commandQueue, yBuffer, true, 0, n
+			* Sizeof.cl_float, Pointer.to(result), 0, null, null);
+
+		// Clean up
+		clReleaseMemObject(xBuffer);
+		clReleaseMemObject(yBuffer);
 		clReleaseEvent(event);
 
 		return result;

@@ -19,8 +19,6 @@ import java.util.stream.IntStream;
  * (the next layer that will be updated), so that upsampling layers are compatible
  */
 public class Convolutional implements Layer {
-	private Mode mode = Mode.TRAIN;
-
 	private int batchSize;
 
 	// the filter amount is the output depth
@@ -30,8 +28,8 @@ public class Convolutional implements Layer {
 	private UpdaterType updaterType;
 	private Initializer initializer;
 	private Activation activation;
-	private Updater[] filterUpdaters;
-	private Updater[] biasUpdaters;
+	private Updater filterUpdater;
+	private Updater biasUpdater;
 
 	// the pad is the amount an input is padded
 	// the pad width and pad height are the heights and widths of the input after it is padded
@@ -79,18 +77,17 @@ public class Convolutional implements Layer {
 		filterAmount = dis.readInt();
 		filterSize = dis.readInt();
 
-		filterUpdaters = new Updater[filterAmount * depth * filterSize * filterSize];
-		filters = new float[filterAmount * depth * filterSize * filterSize];
-
-		biasUpdaters = new Updater[filterAmount];
-		biases = new float[filterAmount];
-
 		activation = Activation.fromString(dis);
 		updaterType = UpdaterType.fromString(dis);
 
+		filterUpdater = updaterType.create(dis);
+		filters = new float[filterAmount * depth * filterSize * filterSize];
+
+		biasUpdater = updaterType.create(dis);
+		biases = new float[filterAmount];
+
 		for (int f = 0; f < filterAmount; f++) {
 			biases[f] = dis.readFloat();
-			biasUpdaters[f] = updaterType.create(dis);
 
 			for (int k = 0; k < depth; k++) {
 				for (int m = 0; m < filterSize; m++) {
@@ -98,7 +95,6 @@ public class Convolutional implements Layer {
 						int index = n + filterSize * (m + filterSize * (k + depth * f));
 
 						filters[index] = dis.readFloat();
-						filterUpdaters[index] = updaterType.create(dis);
 					}
 				}
 			}
@@ -138,23 +134,21 @@ public class Convolutional implements Layer {
 		if (filterSize <= 0)
 			throw new IllegalArgumentException("Invalid filter dimensions.");
 
-		filterUpdaters = new Updater[filterAmount * depth * filterSize * filterSize];
 		filters = new float[filterAmount * depth * filterSize * filterSize];
+		filterUpdater = updaterType.create(filters.length);
 
-		biasUpdaters = new Updater[filterAmount];
 		biases = new float[filterAmount];
+		biasUpdater = updaterType.create(biases.length);
 
 		int inputSize = depth * filterSize * filterSize;
 
 		IntStream.range(0, filterAmount).parallel().forEach(f -> {
-			biasUpdaters[f] = updaterType.create();
 			for (int k = 0; k < depth; k++) {
 				for (int m = 0; m < filterSize; m++) {
 					for (int n = 0; n < filterSize; n++) {
 						int index = n + filterSize * (m + filterSize * (k + depth * f));
 
 						filters[index] = initializer.initialize(inputSize);
-						filterUpdaters[index] = updaterType.create();
 					}
 				}
 			}
@@ -162,7 +156,7 @@ public class Convolutional implements Layer {
 	}
 
 	public void setMode(Mode mode) {
-		this.mode = mode;
+
 	}
 
 	/**
@@ -274,9 +268,6 @@ public class Convolutional implements Layer {
 									int gradientIndex = n + filterSize * (m + filterSize * (k + depth * f));
 									int inputIndex = (w + n) + padWidth * ((h + m) + padHeight * (k + depth * b));
 
-									// the gradient is the delta multiplied against the input, since the filters are multiplied with
-									// the
-									// input
 									gradient[gradientIndex] += d * input[inputIndex];
 								}
 							}
@@ -320,15 +311,18 @@ public class Convolutional implements Layer {
 	 * Update the parameters given gradients.
 	 */
 	public void update(int size) {
+		float[] biasUpdate = biasUpdater.update(biasGradient);
+		float[] filterUpdate = filterUpdater.update(gradient);
+
 		IntStream.range(0, filterAmount).parallel().forEach(f -> {
-			biases[f] += biasUpdaters[f].update(biasGradient[f] / size);
+			biases[f] += biasUpdate[f] / size;
 
 			for (int k = 0; k < depth; k++) {
 				for (int m = 0; m < filterSize; m++) {
 					for (int n = 0; n < filterSize; n++) {
 						int filterIndex = n + filterSize * (m + filterSize * (k + depth * f));
 
-						filters[filterIndex] += filterUpdaters[filterIndex].update(gradient[filterIndex] / size);
+						filters[filterIndex] += filterUpdate[filterIndex] / size;
 					}
 				}
 			}
@@ -355,9 +349,11 @@ public class Convolutional implements Layer {
 		activation.export(dos);
 		updaterType.export(dos);
 
+		filterUpdater.export(dos);
+		biasUpdater.export(dos);
+
 		for (int f = 0; f < filterAmount; f++) {
 			dos.writeFloat(biases[f]);
-			biasUpdaters[f].export(dos);
 
 			for (int k = 0; k < depth; k++) {
 				for (int m = 0; m < filterSize; m++) {
@@ -365,7 +361,6 @@ public class Convolutional implements Layer {
 						int index = n + filterSize * (m + filterSize * (k + depth * f));
 
 						dos.writeFloat(filters[index]);
-						filterUpdaters[index].export(dos);
 					}
 				}
 			}

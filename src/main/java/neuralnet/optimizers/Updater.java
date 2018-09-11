@@ -13,7 +13,7 @@ public interface Updater {
 	 * @param gradient the parameter gradient
 	 * @return the delta
 	 */
-	double update(double gradient);
+	float[] update(float[] gradient);
 
 	/**
 	 * Export the parameter specific parameters to an output stream.
