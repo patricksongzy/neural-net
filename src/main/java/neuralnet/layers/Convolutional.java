@@ -1,5 +1,6 @@
 package neuralnet.layers;
 
+import neuralnet.GPU;
 import neuralnet.activations.Activation;
 import neuralnet.activations.ActivationType;
 import neuralnet.costs.Cost;
@@ -7,11 +8,11 @@ import neuralnet.initializers.HeInitialization;
 import neuralnet.initializers.Initializer;
 import neuralnet.optimizers.Updater;
 import neuralnet.optimizers.UpdaterType;
+import org.jocl.blast.CLBlastTranspose;
 
 import java.io.DataInputStream;
 import java.io.DataOutputStream;
 import java.io.IOException;
-import java.util.stream.IntStream;
 
 /**
  * The convolutional layer revolves around convolutions in image processing. Using a similar method, filters are convolved around an image
@@ -48,6 +49,14 @@ public class Convolutional implements Layer {
 
 	private Convolutional(int pad, int stride, int filterAmount, int filterSize, Initializer initializer, UpdaterType updaterType,
 						  ActivationType activationType) {
+		if (initializer == null || updaterType == null || activationType == null)
+			throw new IllegalArgumentException("Values cannot be null.");
+		if (pad < 0)
+			throw new IllegalArgumentException("Pad must be > 0");
+		if (stride <= 0 || filterAmount <= 0 || filterSize <= 0)
+			throw new IllegalArgumentException("Stride, filter amount and filter size must be > 0");
+
+
 		this.pad = pad;
 		this.stride = stride;
 		this.filterAmount = filterAmount;
@@ -65,21 +74,32 @@ public class Convolutional implements Layer {
 	 * @param dis the input stream
 	 */
 	Convolutional(DataInputStream dis) throws IOException {
+		System.out.println("Type: " + getType());
 		inputHeight = dis.readInt();
 		inputWidth = dis.readInt();
 		depth = dis.readInt();
+		System.out.println(String.format("Input Dimensions (h x w x d): %d x %d x %d", inputHeight, inputWidth, depth));
 		padHeight = dis.readInt();
 		padWidth = dis.readInt();
 		pad = dis.readInt();
+		System.out.println("Pad: " + pad);
+		System.out.println(String.format("Pad Dimensions (h x w x d): %d x %d x %d", padHeight, padWidth, depth));
 		outputHeight = dis.readInt();
 		outputWidth = dis.readInt();
 		stride = dis.readInt();
+		System.out.println("Stride: " + stride);
 		filterAmount = dis.readInt();
 		filterSize = dis.readInt();
+		System.out.println("Filter Size: " + filterSize);
+		System.out.println(String.format("Output Size (h x w x d): %d x %d x %d", outputHeight, outputWidth, filterAmount));
 
 		activation = Activation.fromString(dis);
-		updaterType = UpdaterType.fromString(dis);
+		System.out.println("Activation: " + activation.getType());
 
+		updaterType = UpdaterType.fromString(dis);
+		System.out.println("Updater: " + updaterType);
+
+		System.out.println("Importing weights.");
 		filterUpdater = updaterType.create(dis);
 		filters = new float[filterAmount * depth * filterSize * filterSize];
 
@@ -99,40 +119,130 @@ public class Convolutional implements Layer {
 				}
 			}
 		}
+
+		System.out.println("Done importing weights.");
+	}
+
+	static float[] pad(float[] input, int batchSize, int pad, int depth, int padHeight, int padWidth, int inputWidth, int inputHeight) {
+		if (pad > 0) {
+			// creating an array, with the dimensions of the padded input
+			float[] output = new float[batchSize * depth * padHeight * padWidth];
+
+			// padding the array
+			int position = 0;
+			for (int b = 0; b < batchSize; b++) {
+				for (int j = 0; j < depth; j++) {
+					position += pad * padWidth;
+
+					for (int k = 0; k < inputWidth * inputHeight; k += inputWidth) {
+						System.arraycopy(input, k + (inputWidth * inputHeight) * (j + depth * b), output, pad + position, inputWidth);
+						position += padWidth;
+					}
+
+					position += pad * padWidth;
+				}
+			}
+
+			return output;
+		}
+
+		return input;
+	}
+
+	public void setMode(Mode mode) {
+
+	}
+
+	static float[] removePad(float[] input, int batchSize, int pad, int depth, int padWidth, int inputWidth, int inputHeight) {
+		if (pad > 0) {
+			// creating an array, with the dimensions of the padded input
+			float[] output = new float[batchSize * depth * inputHeight * inputWidth];
+
+			// padding the array
+			int position = 0;
+			for (int b = 0; b < batchSize; b++) {
+				for (int i = 0; i < depth; i++) {
+					position += pad * padWidth;
+
+					for (int j = 0; j < inputWidth * inputHeight; j += inputWidth) {
+						System.arraycopy(input, pad + position, output, j + (inputWidth * inputHeight) * (i + depth * b), inputWidth);
+						position += padWidth;
+					}
+
+					position += pad * padWidth;
+				}
+			}
+
+			return output;
+		}
+
+		return input;
+	}
+
+	private static float[] dilate(float[] input, int batchSize, int amount, int depth, int height, int width) {
+		if (amount > 0) {
+			int dilatedHeight = (height - 1) * (amount - 1) + height;
+			int dilatedWidth = (width - 1) * (amount - 1) + width;
+			float[] output = new float[batchSize * depth * dilatedHeight * dilatedWidth];
+
+			for (int b = 0; b < batchSize; b++) {
+				for (int i = 0; i < depth; i++) {
+					for (int j = 0, h = 0; j < height; j++, h += amount) {
+						for (int k = 0, w = 0; k < width; k++, w += amount) {
+							output[w + dilatedWidth * (h + dilatedHeight * (i + depth * b))] =
+								input[k + width * (j + height * (i + depth * b))];
+						}
+					}
+				}
+			}
+
+			return output;
+		}
+
+		return input;
 	}
 
 	public void setDimensions(int... dimensions) {
-		if (dimensions.length != 3)
+		System.out.println("Type: " + getType());
+
+		if (dimensions.length < 3)
 			throw new IllegalArgumentException();
 
 		this.inputHeight = dimensions[0];
 		this.inputWidth = dimensions[1];
 		this.depth = dimensions[2];
 
+		System.out.println(String.format("Input Dimensions (h x w x d): %d x %d x %d", inputHeight, inputWidth, depth));
+
 		if (inputHeight <= 0 || inputWidth <= 0 || depth <= 0)
 			throw new IllegalArgumentException("Invalid input dimensions.");
-
-		if (pad < 0)
-			throw new IllegalArgumentException("Padding must be > 0.");
 
 		// calculating the post padding dimensions
 		padHeight = inputHeight + 2 * pad;
 		padWidth = inputWidth + 2 * pad;
+		System.out.println(String.format("Pad Dimensions (h x w x d): %d x %d x %d", padHeight, padWidth, depth));
 
-		if ((padHeight - filterSize) % stride != 0)
-			throw new IllegalArgumentException("Invalid output dimensions.");
-		if ((padWidth - filterSize) % stride != 0)
-			throw new IllegalArgumentException("Invalid output dimensions.");
+		if ((padHeight - filterSize) % stride != 0 || (padWidth - filterSize) % stride != 0) {
+			System.err.println("WARNING: Stride and filter sizes do not match");
+
+			for (StackTraceElement element : Thread.currentThread().getStackTrace()) {
+				System.err.println(element);
+			}
+		}
 
 		// calculating the post convolution dimensions
 		this.outputHeight = (padHeight - filterSize) / stride + 1;
 		this.outputWidth = (padWidth - filterSize) / stride + 1;
+		System.out.println(String.format("Output Size (h x w x d): %d x %d x %d", outputHeight, outputWidth, filterAmount));
 
 		if (outputHeight <= 0 || outputWidth <= 0 || filterAmount <= 0)
 			throw new IllegalArgumentException("Invalid output dimensions.");
 
 		if (filterSize <= 0)
 			throw new IllegalArgumentException("Invalid filter dimensions.");
+
+		System.out.println("Activation: " + activation.getType());
+		System.out.println("Updater: " + updaterType);
 
 		filters = new float[filterAmount * depth * filterSize * filterSize];
 		filterUpdater = updaterType.create(filters.length);
@@ -142,7 +252,7 @@ public class Convolutional implements Layer {
 
 		int inputSize = depth * filterSize * filterSize;
 
-		IntStream.range(0, filterAmount).parallel().forEach(f -> {
+		for (int f = 0; f < filterAmount; f++) {
 			for (int k = 0; k < depth; k++) {
 				for (int m = 0; m < filterSize; m++) {
 					for (int n = 0; n < filterSize; n++) {
@@ -152,11 +262,7 @@ public class Convolutional implements Layer {
 					}
 				}
 			}
-		});
-	}
-
-	public void setMode(Mode mode) {
-
+		}
 	}
 
 	/**
@@ -165,33 +271,11 @@ public class Convolutional implements Layer {
 	 * @param input the input
 	 * @return the padded input
 	 */
-	float[] pad(float[] input, int batchSize) {
+	private float[] pad(float[] input, int batchSize) {
 		if (batchSize <= 0)
 			throw new IllegalArgumentException("Batch size must be > 0.");
 
-		if (pad > 0) {
-			// creating an array, with the dimensions of the padded input
-			float[] out = new float[batchSize * depth * padHeight * padWidth];
-
-			// padding the array
-			int position = 0;
-			for (int b = 0; b < batchSize; b++) {
-				for (int j = 0; j < depth; j++) {
-					position += pad * padWidth;
-
-					for (int k = 0; k < inputWidth * inputHeight; k += inputWidth) {
-						System.arraycopy(input, k + (inputWidth * inputHeight) * (j + depth * b), out, pad + position, inputWidth);
-						position += padWidth;
-					}
-
-					position += pad * padWidth;
-				}
-			}
-
-			return out;
-		}
-
-		return input;
+		return pad(input, batchSize, pad, depth, padHeight, padWidth, inputWidth, inputHeight);
 	}
 
 	public float[] forward(float[] x, int batchSize) {
@@ -200,35 +284,42 @@ public class Convolutional implements Layer {
 		input = pad(x, batchSize);
 		output = new float[batchSize * filterAmount * outputHeight * outputWidth];
 
-		IntStream.range(0, batchSize).parallel().forEach(b -> {
-			for (int f = 0; f < filterAmount; f++) {
-				for (int i = 0; i < outputHeight; i++) {
-					for (int j = 0; j < outputWidth; j++) {
-						// performing strides
-						int h = i * stride;
-						int w = j * stride;
+		int patchSize = filterSize * filterSize * depth;
 
-						// convoluted value is the sum of the filters multiplied against the inputs at a certain position
-						float conv = 0;
+		float[] biasMatrix = new float[filterAmount * outputHeight * outputWidth];
 
-						for (int k = 0; k < depth; k++) {
-							for (int m = 0; m < filterSize; m++) {
-								for (int n = 0; n < filterSize; n++) {
-									int filterIndex = n + filterSize * (m + filterSize * (k + depth * f));
-									int inputIndex = (w + n) + padWidth * ((h + m) + padHeight * (k + depth * b));
+		for (int f = 0; f < filterAmount; f++) {
+			for (int i = 0; i < outputHeight * outputWidth; i++) {
+				biasMatrix[f + filterAmount * i] = biases[f];
+			}
+		}
 
-									conv += filters[filterIndex] * input[inputIndex];
-								}
+		for (int b = 0; b < batchSize; b++) {
+			float[] inputMatrix = new float[patchSize * outputHeight * outputWidth];
+
+			int inputIndex = 0;
+
+			for (int i = 0, h = 0; i < outputHeight; i++, h += stride) {
+				for (int j = 0, w = 0; j < outputWidth; j++, w += stride) {
+					for (int k = 0; k < depth; k++) {
+						for (int m = 0; m < filterSize; m++) {
+							for (int n = 0; n < filterSize; n++) {
+								inputMatrix[inputIndex++] = input[(w + n) + padWidth * ((h + m) + padHeight * (k + depth * b))];
 							}
 						}
-
-						// adding biases to shift the activation function
-						int activatedIndex = j + outputWidth * (i + outputHeight * (f + filterAmount * b));
-						output[activatedIndex] = (conv + biases[f]);
 					}
 				}
 			}
-		});
+
+			float[] conv = GPU.sgemm(CLBlastTranspose.CLBlastTransposeNo, CLBlastTranspose.CLBlastTransposeYes, outputHeight * outputWidth,
+				filterAmount, patchSize, inputMatrix, patchSize, filters, patchSize, biasMatrix, filterAmount);
+
+			for (int f = 0; f < filterAmount; f++) {
+				for (int i = 0; i < outputHeight * outputWidth; i++) {
+					output[i + (outputWidth * outputHeight) * (f + filterAmount * b)] = conv[f + filterAmount * i];
+				}
+			}
+		}
 
 		// activation
 		activation.activation(output, batchSize);
@@ -236,31 +327,28 @@ public class Convolutional implements Layer {
 		return output;
 	}
 
-	public float[] backward(Cost cost, float[] target) {
-		float[] previousDelta = cost.derivative(output, target, batchSize);
-
-		return backward(previousDelta);
+	public float[] backward(Cost cost, float[] target, boolean calculateDelta) {
+		return backward(cost.derivative(output, target, batchSize), calculateDelta);
 	}
 
-	public float[] backward(float[] previousDelta) {
-		// back propagation on the Convolutional layers are calculated a layer ahead
-		float[] delta = new float[batchSize * depth * padHeight * padWidth];
-
+	public float[] backward(float[] previousDelta, boolean calculateDelta) {
 		gradient = new float[filterAmount * depth * filterSize * filterSize];
 		biasGradient = new float[filterAmount];
 
 		// derivative
 		output = activation.derivative(output);
 
-		IntStream.range(0, batchSize).parallel().forEach(b -> {
+		for (int b = 0; b < batchSize; b++) {
 			for (int f = 0; f < filterAmount; f++) {
 				for (int i = 0, h = 0; i < outputHeight; i++, h += stride) {
 					for (int j = 0, w = 0; j < outputWidth; j++, w += stride) {
 						int index = j + outputWidth * (i + outputHeight * (f + filterAmount * b));
 
 						// the bias gradient is the delta, since biases are just added to the output
-						float d = previousDelta[index] * output[index];
-						biasGradient[f] += d;
+						previousDelta[index] *= output[index];
+
+						float delta = previousDelta[index];
+						biasGradient[f] += delta;
 
 						for (int k = 0; k < depth; k++) {
 							for (int m = 0; m < filterSize; m++) {
@@ -268,33 +356,40 @@ public class Convolutional implements Layer {
 									int gradientIndex = n + filterSize * (m + filterSize * (k + depth * f));
 									int inputIndex = (w + n) + padWidth * ((h + m) + padHeight * (k + depth * b));
 
-									gradient[gradientIndex] += d * input[inputIndex];
+									gradient[gradientIndex] += delta * input[inputIndex];
 								}
 							}
 						}
 					}
 				}
 			}
-		});
+		}
 
-		// calculating delta
-		IntStream.range(0, batchSize).parallel().forEach(b -> {
-			for (int k = 0; k < depth; k++) {
-				for (int i = 0; i < padHeight; i++) {
-					for (int j = 0; j < padWidth; j++) {
-						int h = i * stride;
-						int w = j * stride;
-						int deltaIndex = j + padWidth * (i + padHeight * (k + depth * b));
+		float[] delta = new float[batchSize * depth * padHeight * padWidth];
 
-						for (int f = 0; f < filterAmount; f++) {
-							for (int m = 0; m < filterSize; m++) {
-								for (int n = 0; n < filterSize; n++) {
-									if ((w - n) < outputWidth && (h - m) < outputHeight && (w - n) >= 0 && (h - m) >= 0) {
-										int upsampledIndex = (w - n) + outputWidth * ((h - m) + outputHeight * f);
-										int filterIndex = n + filterSize * (m + filterSize * (k + depth * (f + filterAmount * b)));
+		if (calculateDelta) {
+			previousDelta = dilate(previousDelta, batchSize, stride, filterAmount, outputHeight, outputWidth);
 
-										// same as forward propagation, except the activation derivative is multiplied later
-										delta[deltaIndex] += previousDelta[upsampledIndex] * filters[filterIndex];
+			int dilatedHeight = (outputHeight - 1) * (stride - 1) + outputHeight;
+			int dilatedWidth = (outputWidth - 1) * (stride - 1) + outputWidth;
+
+			// calculating delta
+			for (int b = 0; b < batchSize; b++) {
+				for (int k = 0; k < depth; k++) {
+					for (int i = 0; i < padHeight; i++) {
+						for (int j = 0; j < padWidth; j++) {
+							int deltaIndex = j + padWidth * (i + padHeight * (k + depth * b));
+
+							for (int f = 0; f < filterAmount; f++) {
+								for (int m = 0; m < filterSize; m++) {
+									for (int n = 0; n < filterSize; n++) {
+										// checks since kernels are flipped
+										if ((j - n) < dilatedWidth && (i - m) < dilatedHeight && (j - n) >= 0 && (i - m) >= 0) {
+											int outputIndex = (j - n) + dilatedWidth * ((i - m) + dilatedHeight * (f + filterAmount * b));
+											int filterIndex = n + filterSize * (m + filterSize * (k + depth * f));
+
+											delta[deltaIndex] += previousDelta[outputIndex] * filters[filterIndex];
+										}
 									}
 								}
 							}
@@ -302,9 +397,18 @@ public class Convolutional implements Layer {
 					}
 				}
 			}
-		});
+
+			return removePad(delta, batchSize);
+		}
 
 		return delta;
+	}
+
+	private float[] removePad(float[] input, int batchSize) {
+		if (batchSize <= 0)
+			throw new IllegalArgumentException("Batch size must be > 0.");
+
+		return removePad(input, batchSize, pad, depth, padWidth, inputWidth, inputHeight);
 	}
 
 	/**
@@ -314,7 +418,7 @@ public class Convolutional implements Layer {
 		float[] biasUpdate = biasUpdater.update(biasGradient);
 		float[] filterUpdate = filterUpdater.update(gradient);
 
-		IntStream.range(0, filterAmount).parallel().forEach(f -> {
+		for (int f = 0; f < filterAmount; f++) {
 			biases[f] += biasUpdate[f] / size;
 
 			for (int k = 0; k < depth; k++) {
@@ -326,7 +430,7 @@ public class Convolutional implements Layer {
 					}
 				}
 			}
-		});
+		}
 	}
 
 	public float[][][] getParameters() {

@@ -6,7 +6,6 @@ import java.io.DataInputStream;
 import java.io.DataOutputStream;
 import java.io.IOException;
 import java.util.concurrent.ThreadLocalRandom;
-import java.util.stream.IntStream;
 
 /**
  * The Dropout layer drops certain connections to reduce over-fitting during training. During evaluation, dropout layers do not take effect.
@@ -27,29 +26,41 @@ public class Dropout implements Layer {
 	}
 
 	Dropout(DataInputStream dis) throws IOException {
+		System.out.println("Type: " + getType());
 		inputSize = dis.readInt();
+		System.out.println("Input Size: " + inputSize);
 		dropout = dis.readFloat();
+		System.out.println("Dropout: " + dropout);
 	}
 
 	public void setDimensions(int... dimensions) {
+		System.out.println("Type: " + getType());
+
 		inputSize = dimensions[0];
 		for (int i = 1; i < dimensions.length; i++)
 			inputSize *= dimensions[i];
+
+		System.out.println("Input Size: " + inputSize);
+		System.out.println("Dropout: " + dropout);
 	}
 
 	public void setMode(Mode mode) {
 		this.mode = mode;
 	}
 
-	public float[] backward(Cost cost, float[] target) {
-		return cost.derivative(output, target, batchSize);
+	public float[] backward(Cost cost, float[] target, boolean calculateDelta) {
+		if (calculateDelta) {
+			return cost.derivative(output, target, batchSize);
+		}
+
+		return new float[inputSize];
 	}
 
 	public LayerType getType() {
 		return LayerType.DROPOUT;
 	}
 
-	public float[] backward(float[] previousDelta) {
+	public float[] backward(float[] previousDelta, boolean calculateDelta) {
 		return previousDelta;
 	}
 
@@ -70,7 +81,7 @@ public class Dropout implements Layer {
 		if (mode == Mode.TRAIN) {
 			output = new float[batchSize * inputSize];
 
-			IntStream.range(0, batchSize).parallel().forEach(b -> {
+			for (int b = 0; b < batchSize; b++) {
 				for (int i = 0; i < inputSize; i++) {
 					// if a random float is past the dropout threshold, then drop the connection by setting the output to zero
 					if (ThreadLocalRandom.current().nextFloat() < dropout)
@@ -78,7 +89,7 @@ public class Dropout implements Layer {
 					else
 						output[i + inputSize * b] = input[i + inputSize * b] / dropout;
 				}
-			});
+			}
 
 			return output;
 		}

@@ -11,6 +11,7 @@ import java.util.stream.IntStream;
  * The ADAM updater stores <code>m</code> and <code>v</code> as parameters for each layer. Although other updaters may outperform ADAM,
  * ADAM is commonly used, due to the fact that it works well without adjusting any hyper-parameters.
  */
+@SuppressWarnings("unused")
 public class Adam implements Updater {
 	private static float beta1 = 0.9f;
 	private static float beta2 = 0.999f;
@@ -46,12 +47,10 @@ public class Adam implements Updater {
 	 *
 	 * @param learningRate the learning rate
 	 */
-	@SuppressWarnings("unused")
 	public static void init(float learningRate) {
 		Adam.learningRate = learningRate;
 	}
 
-	@SuppressWarnings("unused")
 	public static void init(float beta1, float beta2, float epsilon, float learningRate) {
 		Adam.beta1 = beta1;
 		Adam.beta2 = beta2;

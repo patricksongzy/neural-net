@@ -48,8 +48,9 @@ public class Model {
 		layers[0].setDimensions(inputDimensions); // setting input dimensions
 
 		// each layer's output is the next layer's input
-		for (int i = 1; i < layers.length; i++)
+		for (int i = 1; i < layers.length; i++) {
 			layers[i].setDimensions(layers[i - 1].getOutputDimensions());
+		}
 	}
 
 	/**
@@ -61,7 +62,7 @@ public class Model {
 		DataInputStream dis = null;
 
 		try {
-			dis = new DataInputStream(new BufferedInputStream(new FileInputStream(file)));
+			dis = new DataInputStream(new BufferedInputStream(new FileInputStream(file), 16384));
 			System.out.println("Importing from: " + file);
 
 			// importing layers
@@ -72,12 +73,12 @@ public class Model {
 			for (int i = 0; i < layerAmount; i++) {
 				System.out.println("Importing layer " + (i + 1) + " / " + layerAmount);
 				layers[i] = LayerType.fromString(dis);
-				System.out.println("Imported layer " + (i + 1) + " / " + layerAmount + " of type " + layers[i].getType());
+				System.out.println("Done importing layer " + (i + 1) + " / " + layerAmount);
 			}
 
 			cost = CostType.fromString(dis);
 
-			System.out.println("Imported from: " + file);
+			System.out.println("Done importing from: " + file);
 		} catch (IOException e) {
 			e.printStackTrace();
 			System.exit(0);
@@ -93,16 +94,21 @@ public class Model {
 		}
 	}
 
+	public Layer getLayer(int index) {
+		return layers[index];
+	}
+
 	/**
 	 * Backpropagates layers, by calculating gradients.
 	 *
 	 * @param target the target
 	 */
-	private void backward(float[] target) {
-		float[] delta = layers[layers.length - 1].backward(cost, target);
+	@SuppressWarnings("WeakerAccess")
+	public void backward(float[] target) {
+		float[] delta = layers[layers.length - 1].backward(cost, target, layers.length > 1);
 
 		for (int i = layers.length - 2; i >= 0; i--)
-			delta = layers[i].backward(delta);
+			delta = layers[i].backward(delta, i > 0);
 	}
 
 	/**
@@ -129,7 +135,8 @@ public class Model {
 			layer.setMode(mode);
 	}
 
-	private void update(int size) {
+	@SuppressWarnings("WeakerAccess")
+	public void update(int size) {
 		List<Callable<Void>> tasks = new ArrayList<>();
 
 		for (Layer layer : layers) {
@@ -182,7 +189,8 @@ public class Model {
 		return output;
 	}
 
-	private void backward(float[][] targets) {
+	@SuppressWarnings("WeakerAccess")
+	public void backward(float[][] targets) {
 		float[][] delta = new float[targets.length][];
 
 		List<Callable<Void>> tasks = new ArrayList<>();
@@ -190,7 +198,7 @@ public class Model {
 			if (i >= 0) {
 				final int index = i;
 				tasks.add(() -> {
-					delta[index] = layers[layers.length - 1].backward(cost, targets[index]);
+					delta[index] = layers[layers.length - 1].backward(cost, targets[index], layers.length > 1);
 					return null;
 				});
 			}
@@ -201,7 +209,7 @@ public class Model {
 
 				if (j >= 0) {
 					tasks.add(() -> {
-						delta[index] = layers[current].backward(delta[index]);
+						delta[index] = layers[current].backward(delta[index], current > 0);
 						return null;
 					});
 				}
@@ -372,7 +380,9 @@ public class Model {
 	 * @param file the file
 	 */
 	public void export(String file) {
-		try (DataOutputStream dos = new DataOutputStream(new BufferedOutputStream(new FileOutputStream(file, false)))) {
+		file += ".model";
+
+		try (DataOutputStream dos = new DataOutputStream(new BufferedOutputStream(new FileOutputStream(file, false), 16384))) {
 			System.out.println("Exporting to: " + file);
 
 			// exporting layer amount

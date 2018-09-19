@@ -47,17 +47,19 @@ public interface Layer {
 	 *
 	 * @param cost the cost function
 	 * @param targets the target outputs
+	 * @param calculateDelta whether to calculate delta
 	 * @return the delta
 	 */
-	float[] backward(Cost cost, float[] targets);
+	float[] backward(Cost cost, float[] targets, boolean calculateDelta);
 
 	/**
 	 * Back propagation of a hidden layer, given the layer that was back propagated before.
 	 *
 	 * @param previousDelta the previous delta
+	 * @param calculateDelta whether to calculate delta
 	 * @return the delta
 	 */
-	float[] backward(float[] previousDelta);
+	float[] backward(float[] previousDelta, boolean calculateDelta);
 
 	void update(int size);
 

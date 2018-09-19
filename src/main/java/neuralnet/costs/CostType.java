@@ -78,7 +78,7 @@ public enum CostType implements Cost {
 
 			if (batchSize <= 0)
 				throw new IllegalArgumentException("Batch size must be > 0.");
-			if (output.length < (size - 1) + size * (batchSize - 1))
+			if (output.length < (size - 1) + size * (batchSize - 1) || targets.length < output.length)
 				throw new IllegalArgumentException("Invalid array lengths.");
 
 			float[] delta = new float[output.length];

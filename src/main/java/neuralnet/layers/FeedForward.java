@@ -13,7 +13,6 @@ import org.jocl.blast.CLBlastTranspose;
 import java.io.DataInputStream;
 import java.io.DataOutputStream;
 import java.io.IOException;
-import java.util.stream.IntStream;
 
 /**
  * FeedForward layers have a weight for each input. The inputs are multiplied to the weights, summed, then a bias term is added. The
@@ -41,13 +40,22 @@ public class FeedForward implements Layer {
 	 * @param dis the input stream
 	 */
 	FeedForward(DataInputStream dis) throws IOException {
+		System.out.println("Type: " + getType());
+
 		inputSize = dis.readInt();
 		outputSize = dis.readInt();
 		temperature = dis.readFloat();
 
-		activation = Activation.fromString(dis);
-		updaterType = UpdaterType.fromString(dis);
+		System.out.println("Input Size: " + inputSize);
+		System.out.println("Output Size: " + outputSize);
+		System.out.println("Temperature: " + temperature);
 
+		activation = Activation.fromString(dis);
+		System.out.println("Activation: " + activation.getType());
+		updaterType = UpdaterType.fromString(dis);
+		System.out.println("Updater: " + updaterType);
+
+		System.out.println("Importing weights.");
 		weights = new float[outputSize * inputSize];
 		weightUpdater = updaterType.create(dis);
 
@@ -66,16 +74,22 @@ public class FeedForward implements Layer {
 				weights[index] = dis.readFloat();
 			}
 		}
+
+		System.out.println("Done importing weights.");
 	}
 
 	private FeedForward(int outputSize, float temperature, Initializer initializer,
 						UpdaterType updaterType, Activation activation) {
-		if (outputSize <= 0)
-			throw new IllegalArgumentException("Output size must be > 0.");
-		if (temperature <= 0)
-			throw new IllegalArgumentException("Temperature must be > 0.");
 		if (initializer == null || updaterType == null || activation == null)
 			throw new IllegalArgumentException("Values cannot be null.");
+
+		if (activation.getType() != Activation.Type.SOFTMAX && temperature != 1) {
+			System.err.println("WARNING: Temperature is usually used with softmax.");
+
+			for (StackTraceElement element : Thread.currentThread().getStackTrace()) {
+				System.err.println(element);
+			}
+		}
 
 		this.outputSize = outputSize;
 		this.temperature = temperature;
@@ -89,12 +103,22 @@ public class FeedForward implements Layer {
 	}
 
 	public void setDimensions(int... dimensions) {
+		System.out.println("Type: " + getType());
+
 		inputSize = dimensions[0];
 		for (int i = 1; i < dimensions.length; i++)
 			inputSize *= dimensions[i];
 
+		System.out.println("Input Size: " + inputSize);
+		System.out.println("Output Size: " + outputSize);
+		System.out.println("Temperature: " + temperature);
+
 		if (inputSize <= 0)
 			throw new IllegalArgumentException("Invalid input dimensions.");
+		if (outputSize <= 0)
+			throw new IllegalArgumentException("Output size must be > 0.");
+		if (temperature <= 0)
+			throw new IllegalArgumentException("Temperature must be > 0.");
 
 		weights = new float[outputSize * inputSize];
 		weightUpdater = updaterType.create(weights.length);
@@ -142,7 +166,7 @@ public class FeedForward implements Layer {
 		return output;
 	}
 
-	public float[] backward(Cost cost, float[] target) {
+	public float[] backward(Cost cost, float[] target, boolean calculateDelta) {
 		float[] previousDelta;
 
 		if (activation.getType() == Activation.Type.SOFTMAX)
@@ -150,13 +174,13 @@ public class FeedForward implements Layer {
 		else
 			previousDelta = cost.derivative(output, target, batchSize);
 
-		return backward(previousDelta);
+		return backward(previousDelta, calculateDelta);
 	}
 
-	public float[] backward(float[] previousDelta) {
+	public float[] backward(float[] previousDelta, boolean calculateDelta) {
 		output = activation.derivative(output);
 
-		IntStream.range(0, batchSize).parallel().forEach(b -> {
+		for (int b = 0; b < batchSize; b++) {
 			for (int i = 0; i < outputSize; i++) {
 				int index = i + outputSize * b;
 
@@ -165,15 +189,17 @@ public class FeedForward implements Layer {
 
 				biasGradient[i] += previousDelta[index];
 			}
-		});
+		}
 
 		gradient = GPU.sgemm(CLBlastTranspose.CLBlastTransposeYes, CLBlastTranspose.CLBlastTransposeNo, outputSize,
 			inputSize, batchSize, previousDelta, outputSize, input, inputSize, gradient, inputSize);
 
 		float[] delta = new float[batchSize * inputSize];
 
-		delta = GPU.sgemm(CLBlastTranspose.CLBlastTransposeNo, CLBlastTranspose.CLBlastTransposeNo, batchSize,
-			inputSize, outputSize, previousDelta, outputSize, weights, inputSize, delta, inputSize);
+		if (calculateDelta) {
+			delta = GPU.sgemm(CLBlastTranspose.CLBlastTransposeNo, CLBlastTranspose.CLBlastTransposeNo, batchSize,
+				inputSize, outputSize, previousDelta, outputSize, weights, inputSize, delta, inputSize);
+		}
 
 		return delta;
 	}

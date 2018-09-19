@@ -2,6 +2,7 @@ package neuralnet.initializers;
 
 import java.util.concurrent.ThreadLocalRandom;
 
+@SuppressWarnings("unused")
 public class HeInitialization implements Initializer {
 	public float initialize(int inputSize) {
 		if (inputSize < 0)

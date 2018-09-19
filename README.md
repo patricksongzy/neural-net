@@ -13,4 +13,6 @@ This project includes:
 ## Problems
 * The Plot.java file is a mess, but is not essential to the program. It was merely created to show a general idea of training progress.
 * Variable naming in GRU is not completely correct (as they should be named to represent before-activation derivatives ie. if `y_t = x_t * w_t;` and `x_{t + 1} = activation(y_t);` then the "before-activation" derivative would be `dx_{t + 1}/dy_t`). I was unable to come up with proper variable names. (dhRaw is used [Here](https://gist.github.com/karpathy/d4dee566867f8291f086))
-* Convolutional layers and pooling layers are not accelerated with a BLAS yet. Fast fourrier transforms (FFT), custom kernels or xgemm can all be used. This may be implemented in the future.
+
+## No Computational Graphs
+* Makes it more clear on how layers interact with each other.
