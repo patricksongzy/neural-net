@@ -15,6 +15,8 @@ public class Inception implements Layer {
 	private int height, width, depth;
 	private int[] filterAmounts;
 
+	private float[] output;
+
 	private Layer[] bottleneck;
 	private Layer[] conv;
 
@@ -109,6 +111,13 @@ public class Inception implements Layer {
 	}
 
 	public void setMode(Mode mode) {
+		for (Layer layer : bottleneck) {
+			layer.setMode(mode);
+		}
+
+		for (Layer layer : conv) {
+			layer.setMode(mode);
+		}
 	}
 
 	public LayerType getType() {
@@ -128,8 +137,8 @@ public class Inception implements Layer {
 			outputs[i + 1] = conv[i].forward(outputs[i + 1], batchSize);
 		}
 
-		int depth = getOutputDimensions()[2];
-		float[] output = new float[height * width * depth * batchSize];
+		int outputDepth = getOutputDimensions()[2];
+		output = new float[height * width * outputDepth * batchSize];
 		int offset = 0;
 		for (int i = 0; i < bottleneck.length; i++) {
 			int filterAmount = filterAmounts[i == 0 ? 0 : i + 2];
@@ -138,7 +147,7 @@ public class Inception implements Layer {
 				for (int f = 0; f < filterAmount; f++) {
 					for (int h = 0; h < height; h++) {
 						System.arraycopy(outputs[i], width * (h + height * (f + filterAmount * b)), output,
-							width * (h + height * ((f + offset) + depth * b)), width);
+							width * (h + height * ((f + offset) + outputDepth * b)), width);
 					}
 				}
 			}
@@ -150,11 +159,54 @@ public class Inception implements Layer {
 	}
 
 	public float[] backward(Cost cost, float[] target, boolean calculateDelta) {
-		return new float[height * width * depth * batchSize];
+		return backward(cost.derivative(output, target, batchSize), calculateDelta);
 	}
 
 	public float[] backward(float[] previousDelta, boolean calculateDelta) {
-		return new float[height * width * depth * batchSize];
+		float[][] deltas = new float[bottleneck.length][];
+
+		int outputDepth = getOutputDimensions()[2];
+		int offset = 0;
+
+		for (int i = 0; i < bottleneck.length; i++) {
+			int filterAmount = filterAmounts[i == 0 ? 0 : i + 2];
+			deltas[i] = new float[filterAmount * batchSize * height * width];
+
+			for (int b = 0; b < batchSize; b++) {
+				for (int f = 0; f < filterAmount; f++) {
+					for (int h = 0; h < height; h++) {
+						System.arraycopy(previousDelta, width * (h + height * ((f + offset) + outputDepth * b)), deltas[i],
+							width * (h + height * (f + filterAmount * b)), width);
+					}
+				}
+			}
+
+			offset += filterAmount;
+		}
+
+		for (int i = 0; i < conv.length; i++) {
+			deltas[i + 1] = conv[i].backward(deltas[i + 1], true);
+		}
+
+		for (int i = 0; i < bottleneck.length; i++) {
+			deltas[i] = bottleneck[i].backward(deltas[i], calculateDelta);
+		}
+
+		float[] delta = new float[batchSize * height * width * depth];
+
+		for (int i = 0; i < bottleneck.length; i++) {
+			for (int b = 0; b < batchSize; b++) {
+				for (int k = 0; k < depth; k++) {
+					for (int h = 0; h < height; h++) {
+						for (int w = 0; w < width; w++) {
+							delta[w + width * (h + height * (k + depth * b))] += deltas[i][w + width * (h + height * (k + depth * b))];
+						}
+					}
+				}
+			}
+		}
+
+		return delta;
 	}
 
 	public int[] getOutputDimensions() {

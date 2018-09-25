@@ -87,6 +87,14 @@ public class Pooling implements Layer {
 		System.out.println(String.format("Pad Dimensions (h x w x d): %d x %d x %d", padHeight, padWidth, depth));
 		System.out.println(String.format("Output Dimensions (h x w x d): %d x %d x %d", downsampleHeight, downsampleWidth, depth));
 
+		if ((padHeight - downsampleSize) % downsampleStride != 0 || (padWidth - downsampleSize) % downsampleStride != 0) {
+			System.err.println("WARNING: Stride and filter sizes do not match");
+
+			for (StackTraceElement element : Thread.currentThread().getStackTrace()) {
+				System.err.println(element);
+			}
+		}
+
 		if (depth <= 0 || inputHeight <= 0 || inputWidth <= 0)
 			throw new IllegalArgumentException("Invalid input dimensions.");
 
@@ -104,7 +112,7 @@ public class Pooling implements Layer {
 		if (batchSize <= 0)
 			throw new IllegalArgumentException("Batch size must be > 0.");
 
-		return Convolutional.pad(input, batchSize, pad, depth, padHeight, padWidth, inputWidth, inputHeight);
+		return Convolutional.pad(input, batchSize, pad, depth, padHeight, padWidth, inputHeight, inputWidth);
 	}
 
 	public float[] forward(float[] x, int batchSize) {
@@ -124,8 +132,7 @@ public class Pooling implements Layer {
 						int h = i * downsampleStride;
 						int w = j * downsampleStride;
 
-						int downsampleIndex =
-							(j + roundWidth) + downsampleWidth * ((i + roundHeight) + downsampleHeight * (f + depth * b));
+						int downsampleIndex = (j + roundWidth) + downsampleWidth * ((i + roundHeight) + downsampleHeight * (f + depth * b));
 						if (mode == Mode.MAX) {
 							int index = 0;
 							float max = Float.NEGATIVE_INFINITY;
@@ -186,17 +193,17 @@ public class Pooling implements Layer {
 								for (int m = 0; m < downsampleSize; m++) {
 									for (int n = 0; n < downsampleSize; n++) {
 										// filling input max locations with deltas
-										if (switches[(w + n) + padWidth * ((h + m) + padHeight * (f + depth * b))]) {
-											upsampled[(w + n) + inputWidth * ((h + m) + inputHeight * (f + depth * b)) + padWidth *
-												padHeight * depth * b] = previousDelta[downsampleIndex];
+										int index = (w + n) + padWidth * ((h + m) + padHeight * (f + depth * b));
+										if (switches[index]) {
+											upsampled[index] = previousDelta[downsampleIndex];
 										}
 									}
 								}
 							} else {
 								for (int m = 0; m < downsampleSize; m++) {
 									for (int n = 0; n < downsampleSize; n++) {
-										upsampled[(w + n) + inputWidth * ((h + m) + inputHeight * (f + depth * b)) + padWidth *
-											padHeight * depth * b] = previousDelta[downsampleIndex] / (downsampleSize * downsampleSize);
+										int index = (w + n) + padWidth * ((h + m) + padHeight * (f + depth * b));
+										upsampled[index] = previousDelta[downsampleIndex] / (downsampleSize * downsampleSize);
 									}
 								}
 							}
@@ -213,7 +220,7 @@ public class Pooling implements Layer {
 		if (batchSize <= 0)
 			throw new IllegalArgumentException("Batch size must be > 0.");
 
-		return Convolutional.removePad(input, batchSize, pad, depth, padWidth, inputWidth, inputHeight);
+		return Convolutional.removePad(input, batchSize, pad, depth, padWidth, inputHeight, inputWidth);
 	}
 
 	public float[][][] getParameters() {

@@ -8,7 +8,7 @@ import java.io.IOException;
  * The LayerType is used for exporting and importing layers.
  */
 public enum LayerType {
-	CONVOLUTIONAL, DROPOUT, FEED_FORWARD, POOLING, GRU, INCEPTION, LRN;
+	CONVOLUTIONAL, DROPOUT, FEED_FORWARD, POOLING, GRU, INCEPTION, RESIDUAL, BATCH_NORMALIZATION, SCALE, LRN, L2;
 
 	/**
 	 * Imports a layer given an input stream.
@@ -30,8 +30,16 @@ public enum LayerType {
 				return new GRU(dis);
 			case INCEPTION:
 				return new Inception(dis);
+			case RESIDUAL:
+				return new Residual(dis);
+			case BATCH_NORMALIZATION:
+				return new BatchNormalization(dis);
+			case SCALE:
+				return new Scale(dis);
 			case LRN:
 				return new LRN(dis);
+			case L2:
+				return new L2(dis);
 			default:
 				throw new IllegalArgumentException();
 		}

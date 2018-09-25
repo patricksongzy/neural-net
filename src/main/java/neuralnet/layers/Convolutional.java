@@ -123,7 +123,7 @@ public class Convolutional implements Layer {
 		System.out.println("Done importing weights.");
 	}
 
-	static float[] pad(float[] input, int batchSize, int pad, int depth, int padHeight, int padWidth, int inputWidth, int inputHeight) {
+	static float[] pad(float[] input, int batchSize, int pad, int depth, int padHeight, int padWidth, int inputHeight, int inputWidth) {
 		if (pad > 0) {
 			// creating an array, with the dimensions of the padded input
 			float[] output = new float[batchSize * depth * padHeight * padWidth];
@@ -153,7 +153,7 @@ public class Convolutional implements Layer {
 
 	}
 
-	static float[] removePad(float[] input, int batchSize, int pad, int depth, int padWidth, int inputWidth, int inputHeight) {
+	static float[] removePad(float[] input, int batchSize, int pad, int depth, int padWidth, int inputHeight, int inputWidth) {
 		if (pad > 0) {
 			// creating an array, with the dimensions of the padded input
 			float[] output = new float[batchSize * depth * inputHeight * inputWidth];
@@ -275,7 +275,7 @@ public class Convolutional implements Layer {
 		if (batchSize <= 0)
 			throw new IllegalArgumentException("Batch size must be > 0.");
 
-		return pad(input, batchSize, pad, depth, padHeight, padWidth, inputWidth, inputHeight);
+		return pad(input, batchSize, pad, depth, padHeight, padWidth, inputHeight, inputWidth);
 	}
 
 	public float[] forward(float[] x, int batchSize) {
@@ -408,7 +408,7 @@ public class Convolutional implements Layer {
 		if (batchSize <= 0)
 			throw new IllegalArgumentException("Batch size must be > 0.");
 
-		return removePad(input, batchSize, pad, depth, padWidth, inputWidth, inputHeight);
+		return removePad(input, batchSize, pad, depth, padWidth, inputHeight, inputWidth);
 	}
 
 	/**
@@ -434,6 +434,10 @@ public class Convolutional implements Layer {
 	}
 
 	public float[][][] getParameters() {
+		return new float[][][]{{filters, gradient}}; //, {biases, biasGradient}};
+	}
+
+	public float[][][] getWeights() {
 		return new float[][][]{{filters, gradient}, {biases, biasGradient}};
 	}
 
