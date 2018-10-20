@@ -4,7 +4,6 @@ import neuralnet.GPU;
 import neuralnet.activations.Activation;
 import neuralnet.activations.ActivationType;
 import neuralnet.costs.Cost;
-import neuralnet.initializers.HeInitialization;
 import neuralnet.initializers.Initializer;
 import neuralnet.optimizers.Updater;
 import neuralnet.optimizers.UpdaterType;
@@ -13,6 +12,8 @@ import org.jocl.blast.CLBlastTranspose;
 import java.io.DataInputStream;
 import java.io.DataOutputStream;
 import java.io.IOException;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 
 /**
  * The convolutional layer revolves around convolutions in image processing. Using a similar method, filters are convolved around an image
@@ -25,6 +26,7 @@ public class Convolutional implements Layer {
 	// the filter amount is the output depth
 	// the filter size is the size of the filters
 	private int filterAmount, filterSize;
+	private int dilation, dilatedSize;
 
 	private UpdaterType updaterType;
 	private Initializer initializer;
@@ -47,7 +49,8 @@ public class Convolutional implements Layer {
 	private float[] gradient, biasGradient;
 	private float[] input, output;
 
-	private Convolutional(int pad, int stride, int filterAmount, int filterSize, Initializer initializer, UpdaterType updaterType,
+	private Convolutional(int pad, int stride, int filterAmount, int filterSize, int dilation, Initializer initializer,
+						  UpdaterType updaterType,
 						  ActivationType activationType) {
 		if (initializer == null || updaterType == null || activationType == null)
 			throw new IllegalArgumentException("Values cannot be null.");
@@ -56,11 +59,13 @@ public class Convolutional implements Layer {
 		if (stride <= 0 || filterAmount <= 0 || filterSize <= 0)
 			throw new IllegalArgumentException("Stride, filter amount and filter size must be > 0");
 
+		this.dilation = dilation;
 
 		this.pad = pad;
 		this.stride = stride;
 		this.filterAmount = filterAmount;
 		this.filterSize = filterSize;
+		dilatedSize = (filterSize - 1) * (dilation - 1) + filterSize;
 
 		this.updaterType = updaterType;
 		this.initializer = initializer;
@@ -74,29 +79,31 @@ public class Convolutional implements Layer {
 	 * @param dis the input stream
 	 */
 	Convolutional(DataInputStream dis) throws IOException {
-		System.out.println("Type: " + getType());
 		inputHeight = dis.readInt();
 		inputWidth = dis.readInt();
 		depth = dis.readInt();
-		System.out.println(String.format("Input Dimensions (h x w x d): %d x %d x %d", inputHeight, inputWidth, depth));
 		padHeight = dis.readInt();
 		padWidth = dis.readInt();
 		pad = dis.readInt();
-		System.out.println("Pad: " + pad);
-		System.out.println(String.format("Pad Dimensions (h x w x d): %d x %d x %d", padHeight, padWidth, depth));
 		outputHeight = dis.readInt();
 		outputWidth = dis.readInt();
 		stride = dis.readInt();
-		System.out.println("Stride: " + stride);
 		filterAmount = dis.readInt();
 		filterSize = dis.readInt();
-		System.out.println("Filter Size: " + filterSize);
-		System.out.println(String.format("Output Size (h x w x d): %d x %d x %d", outputHeight, outputWidth, filterAmount));
+		dilation = dis.readInt();
+		dilatedSize = dis.readInt();
 
 		activation = Activation.fromString(dis);
-		System.out.println("Activation: " + activation.getType());
-
 		updaterType = UpdaterType.fromString(dis);
+
+		System.out.println("Type: " + getType());
+		System.out.println(String.format("Input Dimensions (h x w x d): %d x %d x %d", inputHeight, inputWidth, depth));
+		System.out.println("Pad: " + pad);
+		System.out.println(String.format("Pad Dimensions (h x w x d): %d x %d x %d", padHeight, padWidth, depth));
+		System.out.println("Stride: " + stride);
+		System.out.println("Filter Size: " + filterSize);
+		System.out.println(String.format("Output Size (h x w x d): %d x %d x %d", outputHeight, outputWidth, filterAmount));
+		System.out.println("Activation: " + activation.getType());
 		System.out.println("Updater: " + updaterType);
 
 		System.out.println("Importing weights.");
@@ -179,16 +186,16 @@ public class Convolutional implements Layer {
 		return input;
 	}
 
-	private static float[] dilate(float[] input, int batchSize, int amount, int depth, int height, int width) {
-		if (amount > 0) {
-			int dilatedHeight = (height - 1) * (amount - 1) + height;
-			int dilatedWidth = (width - 1) * (amount - 1) + width;
-			float[] output = new float[batchSize * depth * dilatedHeight * dilatedWidth];
+	private static float[] dilate(float[] input, int dilation, int amount, int depth, int height, int width) {
+		if (dilation > 1) {
+			int dilatedHeight = (height - 1) * (dilation - 1) + height;
+			int dilatedWidth = (width - 1) * (dilation - 1) + width;
+			float[] output = new float[amount * depth * dilatedHeight * dilatedWidth];
 
-			for (int b = 0; b < batchSize; b++) {
+			for (int b = 0; b < amount; b++) {
 				for (int i = 0; i < depth; i++) {
-					for (int j = 0, h = 0; j < height; j++, h += amount) {
-						for (int k = 0, w = 0; k < width; k++, w += amount) {
+					for (int j = 0, h = 0; j < height; j++, h += dilation) {
+						for (int k = 0, w = 0; k < width; k++, w += dilation) {
 							output[w + dilatedWidth * (h + dilatedHeight * (i + depth * b))] =
 								input[k + width * (j + height * (i + depth * b))];
 						}
@@ -223,16 +230,12 @@ public class Convolutional implements Layer {
 		System.out.println(String.format("Pad Dimensions (h x w x d): %d x %d x %d", padHeight, padWidth, depth));
 
 		if ((padHeight - filterSize) % stride != 0 || (padWidth - filterSize) % stride != 0) {
-			System.err.println("WARNING: Stride and filter sizes do not match");
-
-			for (StackTraceElement element : Thread.currentThread().getStackTrace()) {
-				System.err.println(element);
-			}
+			Logger.getGlobal().log(Level.WARNING, "Filter sizes and stride do not match", new IllegalArgumentException());
 		}
 
 		// calculating the post convolution dimensions
-		this.outputHeight = (padHeight - filterSize) / stride + 1;
-		this.outputWidth = (padWidth - filterSize) / stride + 1;
+		this.outputHeight = (padHeight - dilatedSize) / stride + 1;
+		this.outputWidth = (padWidth - dilatedSize) / stride + 1;
 		System.out.println(String.format("Output Size (h x w x d): %d x %d x %d", outputHeight, outputWidth, filterAmount));
 
 		if (outputHeight <= 0 || outputWidth <= 0 || filterAmount <= 0)
@@ -284,7 +287,7 @@ public class Convolutional implements Layer {
 		input = pad(x, batchSize);
 		output = new float[batchSize * filterAmount * outputHeight * outputWidth];
 
-		int patchSize = filterSize * filterSize * depth;
+		int patchSize = dilatedSize * dilatedSize * depth;
 
 		float[] biasMatrix = new float[filterAmount * outputHeight * outputWidth];
 
@@ -294,6 +297,8 @@ public class Convolutional implements Layer {
 			}
 		}
 
+		float[] dilated = dilate(filters, dilation, filterAmount, depth, filterSize, filterSize);
+
 		for (int b = 0; b < batchSize; b++) {
 			float[] inputMatrix = new float[patchSize * outputHeight * outputWidth];
 
@@ -302,8 +307,8 @@ public class Convolutional implements Layer {
 			for (int i = 0, h = 0; i < outputHeight; i++, h += stride) {
 				for (int j = 0, w = 0; j < outputWidth; j++, w += stride) {
 					for (int k = 0; k < depth; k++) {
-						for (int m = 0; m < filterSize; m++) {
-							for (int n = 0; n < filterSize; n++) {
+						for (int m = 0; m < dilatedSize; m++) {
+							for (int n = 0; n < dilatedSize; n++) {
 								inputMatrix[inputIndex++] = input[(w + n) + padWidth * ((h + m) + padHeight * (k + depth * b))];
 							}
 						}
@@ -312,7 +317,7 @@ public class Convolutional implements Layer {
 			}
 
 			float[] conv = GPU.sgemm(CLBlastTranspose.CLBlastTransposeNo, CLBlastTranspose.CLBlastTransposeYes, outputHeight * outputWidth,
-				filterAmount, patchSize, inputMatrix, patchSize, filters, patchSize, biasMatrix, filterAmount);
+				filterAmount, patchSize, inputMatrix, patchSize, dilated, patchSize, biasMatrix, filterAmount);
 
 			for (int f = 0; f < filterAmount; f++) {
 				for (int i = 0; i < outputHeight * outputWidth; i++) {
@@ -368,7 +373,7 @@ public class Convolutional implements Layer {
 		float[] delta = new float[batchSize * depth * padHeight * padWidth];
 
 		if (calculateDelta) {
-			previousDelta = dilate(previousDelta, batchSize, stride, filterAmount, outputHeight, outputWidth);
+			previousDelta = dilate(previousDelta, stride, batchSize, filterAmount, outputHeight, outputWidth);
 
 			int dilatedHeight = (outputHeight - 1) * (stride - 1) + outputHeight;
 			int dilatedWidth = (outputWidth - 1) * (stride - 1) + outputWidth;
@@ -434,7 +439,7 @@ public class Convolutional implements Layer {
 	}
 
 	public float[][][] getParameters() {
-		return new float[][][]{{filters, gradient}}; //, {biases, biasGradient}};
+		return new float[][][]{{filters, gradient}};//, {biases, biasGradient}};
 	}
 
 	public float[][][] getWeights() {
@@ -453,6 +458,8 @@ public class Convolutional implements Layer {
 		dos.writeInt(stride);
 		dos.writeInt(filterAmount);
 		dos.writeInt(filterSize);
+		dos.writeInt(dilation);
+		dos.writeInt(dilatedSize);
 
 		activation.export(dos);
 		updaterType.export(dos);
@@ -491,14 +498,13 @@ public class Convolutional implements Layer {
 		private int pad;
 		private int stride;
 		private int filterAmount, filterSize;
+		private int dilation;
 		private Initializer initializer;
 		private UpdaterType updaterType;
 		private ActivationType activationType;
 
 		public Builder() {
-			initializer = new HeInitialization();
-			updaterType = UpdaterType.ADAM;
-			activationType = ActivationType.RELU;
+			dilation = 1;
 		}
 
 		/**
@@ -548,6 +554,12 @@ public class Convolutional implements Layer {
 			return this;
 		}
 
+		public Builder dilation(int dilation) {
+			this.dilation = dilation;
+
+			return this;
+		}
+
 		/**
 		 * The initializer initializes weights.
 		 *
@@ -582,7 +594,7 @@ public class Convolutional implements Layer {
 		}
 
 		public Convolutional build() {
-			return new Convolutional(pad, stride, filterAmount, filterSize, initializer, updaterType, activationType);
+			return new Convolutional(pad, stride, filterAmount, filterSize, dilation, initializer, updaterType, activationType);
 		}
 	}
 }

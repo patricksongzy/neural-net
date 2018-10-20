@@ -21,7 +21,6 @@ public class Model {
 	private static final int CORES = Runtime.getRuntime().availableProcessors();
 	private static final ThreadPoolExecutor ES = new ThreadPoolExecutor(CORES, CORES, 0L, TimeUnit.MILLISECONDS,
 		new LinkedBlockingQueue<>(), new ThreadPoolExecutor.CallerRunsPolicy());
-	private int inputSize;
 
 	static {
 		Runtime.getRuntime().addShutdownHook(new Thread(() -> {
@@ -34,6 +33,9 @@ public class Model {
 		}));
 	}
 
+	private int inputSize;
+
+	// TODO: Implement non-sequential
 	private Layer[] layers;
 	private Cost cost;
 
@@ -59,10 +61,7 @@ public class Model {
 	 * @param file the path to the file
 	 */
 	public Model(String file) {
-		DataInputStream dis = null;
-
-		try {
-			dis = new DataInputStream(new BufferedInputStream(new FileInputStream(file), 16384));
+		try (DataInputStream dis = new DataInputStream(new BufferedInputStream(new FileInputStream(file), 16384))) {
 			System.out.println("Importing from: " + file);
 
 			// importing layers
@@ -82,16 +81,15 @@ public class Model {
 		} catch (IOException e) {
 			e.printStackTrace();
 			System.exit(0);
-		} finally {
-			// closing the streams
-			try {
-				if (dis != null) {
-					dis.close();
-				}
-			} catch (IOException e) {
-				e.printStackTrace();
-			}
 		}
+	}
+
+	public int[] getOutputDimensions() {
+		return layers[layers.length - 1].getOutputDimensions();
+	}
+
+	public int getLayerAmount() {
+		return layers.length;
 	}
 
 	public Layer getLayer(int index) {
@@ -252,6 +250,7 @@ public class Model {
 	 * @param input  the input
 	 * @param target the target
 	 */
+	@SuppressWarnings("Duplicates")
 	public boolean gradientCheck(float[] input, float[] target, int batchSize) {
 		setMode(Layer.Mode.GRADIENT_CHECK);
 
@@ -312,6 +311,7 @@ public class Model {
 		return (numerator / denominator) < 0.2;
 	}
 
+	@SuppressWarnings("Duplicates")
 	public boolean gradientCheck(float[][] input, float[][] target, int batchSize) {
 		setMode(Layer.Mode.GRADIENT_CHECK);
 

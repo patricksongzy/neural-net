@@ -9,8 +9,10 @@ import java.io.DataInputStream;
 import java.io.DataOutputStream;
 import java.io.IOException;
 
+@SuppressWarnings("FieldCanBeLocal")
 public class Residual implements Layer {
 	private int batchSize;
+	private int pad;
 	private int stride;
 	private int height, width, depth;
 	private int filterAmount;
@@ -23,9 +25,10 @@ public class Residual implements Layer {
 	private Layer[] branch1;
 	private Layer[] branch2;
 
-	private Residual(int filterAmount, int outputDepth, int stride, Initializer initializer, UpdaterType updaterType) {
+	private Residual(int filterAmount, int outputDepth, int pad, int stride, Initializer initializer, UpdaterType updaterType) {
 		this.filterAmount = filterAmount;
 		this.outputDepth = outputDepth;
+		this.pad = pad;
 		this.stride = stride;
 		this.initializer = initializer;
 		this.updaterType = updaterType;
@@ -84,26 +87,22 @@ public class Residual implements Layer {
 		}
 
 		branch2 = new Layer[]{
-			new Convolutional.Builder().pad(0).stride(stride).initializer(initializer).filterSize(1).filterAmount(filterAmount)
+			new Convolutional.Builder().pad(0).stride(1).initializer(initializer).filterSize(1).filterAmount(filterAmount)
 				.activationType(ActivationType.IDENTITY).updaterType(updaterType).build(),
-			new BatchNormalization.Builder().build(),
-			new Scale.Builder().initializer(initializer).activationType(ActivationType.RELU).build(),
-			new Convolutional.Builder().pad(1).stride(1).initializer(initializer).filterSize(3).filterAmount(filterAmount)
+			new BatchNormalization.Builder().initializer(initializer).activationType(ActivationType.RELU).build(),
+			new Convolutional.Builder().pad(pad).dilation(pad).stride(stride).initializer(initializer).filterSize(3).filterAmount(filterAmount)
 				.activationType(ActivationType.IDENTITY).updaterType(updaterType).build(),
-			new BatchNormalization.Builder().build(),
-			new Scale.Builder().initializer(initializer).activationType(ActivationType.RELU).build(),
+			new BatchNormalization.Builder().initializer(initializer).activationType(ActivationType.RELU).build(),
 			new Convolutional.Builder().pad(0).stride(1).initializer(initializer).filterSize(1).filterAmount(outputDepth)
 				.activationType(ActivationType.IDENTITY).updaterType(updaterType).build(),
-			new BatchNormalization.Builder().build(),
-			new Scale.Builder().initializer(initializer).build()
+			new BatchNormalization.Builder().initializer(initializer).build(),
 		};
 
 		if (outputDepth != depth) {
 			branch1 = new Layer[]{
 				new Convolutional.Builder().pad(0).stride(stride).initializer(initializer).filterSize(1).filterAmount(outputDepth)
 					.activationType(ActivationType.IDENTITY).updaterType(updaterType).build(),
-				new BatchNormalization.Builder().build(),
-				new Scale.Builder().initializer(initializer).build()
+				new BatchNormalization.Builder().initializer(initializer).build(),
 			};
 
 			branch1[0].setDimensions(dimensions);
@@ -156,10 +155,12 @@ public class Residual implements Layer {
 		return output;
 	}
 
+	// TODO: implement
 	public float[] backward(Cost cost, float[] target, boolean calculateDelta) {
 		return new float[height * width * depth * batchSize];
 	}
 
+	// TODO: implement
 	public float[] backward(float[] previousDelta, boolean calculateDelta) {
 		return new float[height * width * depth * batchSize];
 	}
@@ -180,16 +181,22 @@ public class Residual implements Layer {
 		}
 
 		float[][][] parameters = new float[length][][];
-
 		int offset = 0;
-		for (Layer layer : branch1) {
-			System.arraycopy(layer.getParameters(), 0, parameters, offset, layer.getParameters().length);
-			offset += layer.getParameters().length;
-		}
+		if (branch1.length > 0) {
+			for (Layer layer : branch2) {
+				System.arraycopy(layer.getParameters(), 0, parameters, offset, layer.getParameters().length);
+				offset += layer.getParameters().length;
+			}
 
-		for (Layer layer : branch2) {
-			System.arraycopy(layer.getParameters(), 0, parameters, offset, layer.getParameters().length);
-			offset += layer.getParameters().length;
+			for (Layer layer : branch1) {
+				System.arraycopy(layer.getParameters(), 0, parameters, offset, layer.getParameters().length);
+				offset += layer.getParameters().length;
+			}
+		} else {
+			for (Layer layer : branch2) {
+				System.arraycopy(layer.getParameters(), 0, parameters, offset, layer.getParameters().length);
+				offset += layer.getParameters().length;
+			}
 		}
 
 		return parameters;
@@ -209,12 +216,14 @@ public class Residual implements Layer {
 	public static class Builder {
 		private int filterAmount;
 		private int outputDepth;
+		private int pad;
 		private int stride;
 		private Initializer initializer;
 		private UpdaterType updaterType;
 
 		public Builder() {
 			outputDepth = -1;
+			pad = 1;
 			stride = 1;
 		}
 
@@ -238,13 +247,18 @@ public class Residual implements Layer {
 			return this;
 		}
 
+		public Builder pad(int pad) {
+			this.pad = pad;
+			return this;
+		}
+
 		public Builder stride(int stride) {
 			this.stride = stride;
 			return this;
 		}
 
 		public Residual build() {
-			return new Residual(filterAmount, outputDepth, stride, initializer, updaterType);
+			return new Residual(filterAmount, outputDepth, pad, stride, initializer, updaterType);
 		}
 	}
 }

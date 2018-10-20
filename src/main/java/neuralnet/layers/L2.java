@@ -6,6 +6,7 @@ import java.io.DataInputStream;
 import java.io.DataOutputStream;
 import java.io.IOException;
 
+@SuppressWarnings("FieldCanBeLocal")
 public class L2 implements Layer {
 	private int inputSize;
 	private int batchSize;
@@ -56,10 +57,12 @@ public class L2 implements Layer {
 		return output;
 	}
 
+	// TODO: implement
 	public float[] backward(Cost cost, float[] target, boolean calculateDelta) {
-		return cost.derivative(output, target, batchSize);
+		return new float[batchSize * inputSize];
 	}
 
+	// TODO: implement
 	public float[] backward(float[] previousDelta, boolean calculateDelta) {
 		return new float[batchSize * inputSize];
 	}

@@ -71,10 +71,12 @@ public class LRN implements Layer {
 		return output;
 	}
 
+	// TODO: implement
 	public float[] backward(Cost cost, float[] target, boolean calculateDelta) {
 		return cost.derivative(output, target, batchSize);
 	}
 
+	// TODO: implement
 	public float[] backward(float[] previousDelta, boolean calculateDelta) {
 		return new float[batchSize * height * width * depth];
 	}

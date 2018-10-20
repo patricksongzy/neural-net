@@ -7,6 +7,7 @@ import java.io.IOException;
 /**
  * The UpdaterType is used for exporting and importing neural networks, and for repeatedly creating instances of an updater.
  */
+@SuppressWarnings("SameReturnValue")
 public enum UpdaterType {
 	ADAM;
 

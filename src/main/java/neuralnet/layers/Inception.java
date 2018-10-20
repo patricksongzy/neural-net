@@ -20,7 +20,7 @@ public class Inception implements Layer {
 	private Layer[] bottleneck;
 	private Layer[] conv;
 
-	private Inception(Initializer initializer, UpdaterType updaterType, LinkedList<Integer> filterAmounts) {
+	private Inception(LinkedList<Integer> filterAmounts, Initializer initializer, UpdaterType updaterType) {
 		if (filterAmounts.size() != 6)
 			throw new IllegalArgumentException("Filter size lengths not correct");
 
@@ -257,7 +257,13 @@ public class Inception implements Layer {
 	public static class Builder {
 		private Initializer initializer;
 		private UpdaterType updaterType;
-		private LinkedList<Integer> filterAmount = new LinkedList<>();
+		private LinkedList<Integer> filterAmounts = new LinkedList<>();
+
+		public Builder filterAmount(int... filterAmounts) {
+			for (int value : filterAmounts)
+				this.filterAmounts.add(value);
+			return this;
+		}
 
 		public Builder initializer(Initializer initializer) {
 			this.initializer = initializer;
@@ -269,14 +275,8 @@ public class Inception implements Layer {
 			return this;
 		}
 
-		public Builder filterAmount(int... filterAmounts) {
-			for (int value : filterAmounts)
-				filterAmount.add(value);
-			return this;
-		}
-
 		public Inception build() {
-			return new Inception(initializer, updaterType, filterAmount);
+			return new Inception(filterAmounts, initializer, updaterType);
 		}
 	}
 }

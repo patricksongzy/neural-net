@@ -80,7 +80,7 @@ class ConvolutionalTest {
 		float[] input = new float[]{
 			2, 1, 0,
 			2, 0, 1,
-					1, 2, 0,};
+			1, 2, 0,};
 
 		float[] updated = new float[]{
 			4, 2, 6,
@@ -99,6 +99,79 @@ class ConvolutionalTest {
 	}
 
 	@Test
+	void dilationTest() {
+		Convolutional convolutional = new Convolutional.Builder().filterAmount(2).activationType(ActivationType.RELU).filterSize(5)
+			.initializer(new HeInitialization()).pad(2).stride(2).updaterType(UpdaterType.ADAM).build();
+		convolutional.setDimensions(3, 3, 2);
+		float[] input = new float[]{
+			2, 1, 0,
+			2, 0, 1,
+			1, 2, 0,
+
+			2, 1, 0,
+			2, 0, 1,
+			1, 2, 0,};
+
+		float[] updated = new float[]{
+			4, 0, 2, 0, 6,
+			0, 0, 0, 0, 0,
+			2, 0, 4, 0, 2,
+			0, 0, 0, 0, 0,
+			6, 0, 2, 0, 2,
+
+			4, 0, 2, 0, 6,
+			0, 0, 0, 0, 0,
+			2, 0, 4, 0, 2,
+			0, 0, 0, 0, 0,
+			6, 0, 2, 0, 2,
+
+			4, 0, 2, 0, 6,
+			0, 0, 0, 0, 0,
+			2, 0, 4, 0, 2,
+			0, 0, 0, 0, 0,
+			6, 0, 2, 0, 2,
+
+			4, 0, 2, 0, 6,
+			0, 0, 0, 0, 0,
+			2, 0, 4, 0, 2,
+			0, 0, 0, 0, 0,
+			6, 0, 2, 0, 2
+		};
+
+		for (int i = 0; i < convolutional.getParameters()[0][0].length; i++) {
+			convolutional.getParameters()[0][0][i] = updated[i];
+		}
+
+		Convolutional dilated = new Convolutional.Builder().filterAmount(2).activationType(ActivationType.RELU).filterSize(3)
+			.initializer(new HeInitialization()).pad(2).stride(2).dilation(2).updaterType(UpdaterType.ADAM).build();
+		dilated.setDimensions(3, 3, 2);
+
+		updated = new float[]{
+			4, 2, 6,
+			2, 4, 2,
+			6, 2, 2,
+
+			4, 2, 6,
+			2, 4, 2,
+			6, 2, 2,
+
+			4, 2, 6,
+			2, 4, 2,
+			6, 2, 2,
+
+			4, 2, 6,
+			2, 4, 2,
+			6, 2, 2
+		};
+
+		for (int i = 0; i < dilated.getParameters()[0][0].length; i++) {
+			dilated.getParameters()[0][0][i] = updated[i];
+		}
+
+		assertArrayEquals(convolutional.forward(input, 1), dilated.forward(input, 1));
+	}
+
+	@Test
 	void gradientTest() {
 		Model model = new Model.Builder().add(
 			new Convolutional.Builder().filterAmount(8).filterSize(2).initializer(new HeInitialization()).updaterType(UpdaterType.ADAM)
@@ -106,10 +179,10 @@ class ConvolutionalTest {
 		).add(
 			new Convolutional.Builder().filterAmount(12).filterSize(3).initializer(new HeInitialization()).updaterType(UpdaterType.ADAM)
 				.pad(1).stride(2).activationType(ActivationType.RELU).build()
-		).cost(CostType.MEAN_SQUARE_ERROR).inputDimensions(36, 36, 1).build();
+		).cost(CostType.MEAN_SQUARE_ERROR).inputDimensions(36, 36, 2).build();
 
 		// just a regular test
-		float[] input = new float[36 * 36];
+		float[] input = new float[36 * 36 * 2];
 		float[] target = new float[10 * 10 * 12];
 
 		for (int i = 0; i < input.length; i++) {

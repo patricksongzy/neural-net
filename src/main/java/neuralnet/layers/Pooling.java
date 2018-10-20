@@ -12,7 +12,7 @@ import java.io.IOException;
  * locations.
  */
 public class Pooling implements Layer {
-	private Mode mode;
+	private final Mode mode;
 
 	private int batchSize;
 	private int pad;

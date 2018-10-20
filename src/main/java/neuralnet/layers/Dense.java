@@ -15,11 +15,11 @@ import java.io.DataOutputStream;
 import java.io.IOException;
 
 /**
- * FeedForward layers have a weight for each input. The inputs are multiplied to the weights, summed, then a bias term is added. The
+ * Dense layers have a weight for each input. The inputs are multiplied to the weights, summed, then a bias term is added. The
  * output is
  * then run through an activation function.
  */
-public class FeedForward implements Layer {
+public class Dense implements Layer {
 	private Mode mode = Mode.TRAIN;
 
 	private int batchSize;
@@ -35,11 +35,11 @@ public class FeedForward implements Layer {
 	private float[] input, output;
 
 	/**
-	 * Initializes a FeedForward layer neural network from a file.
+	 * Initializes a Dense layer neural network from a file.
 	 *
 	 * @param dis the input stream
 	 */
-	FeedForward(DataInputStream dis) throws IOException {
+	Dense(DataInputStream dis) throws IOException {
 		System.out.println("Type: " + getType());
 
 		inputSize = dis.readInt();
@@ -78,8 +78,8 @@ public class FeedForward implements Layer {
 		System.out.println("Done importing weights.");
 	}
 
-	private FeedForward(int outputSize, float temperature, Initializer initializer,
-						UpdaterType updaterType, Activation activation) {
+	private Dense(int outputSize, float temperature, Initializer initializer,
+				  UpdaterType updaterType, Activation activation) {
 		if (initializer == null || updaterType == null || activation == null)
 			throw new IllegalArgumentException("Values cannot be null.");
 
@@ -249,7 +249,7 @@ public class FeedForward implements Layer {
 	}
 
 	/**
-	 * Builder for FeedForward layers.
+	 * Builder for Dense layers.
 	 */
 	@SuppressWarnings({"unused", "WeakerAccess"})
 	public static class Builder {
@@ -322,8 +322,8 @@ public class FeedForward implements Layer {
 			return this;
 		}
 
-		public FeedForward build() {
-			return new FeedForward(outputSize, temperature, initializer, updaterType, activation);
+		public Dense build() {
+			return new Dense(outputSize, temperature, initializer, updaterType, activation);
 		}
 	}
 }

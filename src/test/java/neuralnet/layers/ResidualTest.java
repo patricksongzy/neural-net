@@ -18,6 +18,7 @@ class ResidualTest {
 		for (int i = 0; i < input.length; i++)
 			input[i] = ThreadLocalRandom.current().nextFloat();
 
+		// doesn't do anything, was just to see if there would be any errors, but ResNet is confirmed working.
 		residual.forward(input, 1);
 	}
 }
