@@ -6,7 +6,8 @@ import java.awt.geom.Line2D;
 import java.util.ArrayList;
 import java.util.List;
 
-class Plot extends JPanel {
+@SuppressWarnings("unused")
+public class Plot extends JPanel {
 	private static final Font FONT = new Font("Ubuntu Mono", Font.PLAIN, 16);
 	private StringBuilder progress;
 	private final List<double[]> POSITIONS = new ArrayList<>();
@@ -15,12 +16,12 @@ class Plot extends JPanel {
 	private int iteration, epochs, batch, batchPosition;
 	private double top, xScale, yScale;
 
-	void init(int epochs, double batchAmount) {
+	public void init(int epochs, double batchAmount) {
 		this.epochs = epochs;
 		this.batchAmount = batchAmount;
 	}
 
-	void update(double x, double y, int iteration, int batch, int batchPosition) {
+	public void update(double x, double y, int iteration, int batch, int batchPosition) {
 		xScale = getWidth() / x;
 
 		if (y > top)

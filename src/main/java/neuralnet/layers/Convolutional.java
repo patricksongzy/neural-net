@@ -297,6 +297,7 @@ public class Convolutional implements Layer {
 			}
 		}
 
+		// TODO: more efficient padding and dilations
 		float[] dilated = dilate(filters, dilation, filterAmount, depth, filterSize, filterSize);
 
 		for (int b = 0; b < batchSize; b++) {

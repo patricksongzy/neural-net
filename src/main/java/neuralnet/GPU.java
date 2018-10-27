@@ -131,7 +131,7 @@ public class GPU {
 			m, n, k, 1, aBuffer, 0, lda, bBuffer, 0, ldb, 1, cBuffer, 0, ldc, commandQueue, event);
 
 		// Copy the result data back to the host
-		float result[] = new float[m * n];
+		float[] result = new float[m * n];
 		clEnqueueReadBuffer(commandQueue, cBuffer, true, 0, m * n
 			* Sizeof.cl_float, Pointer.to(result), 0, null, null);
 
@@ -161,7 +161,7 @@ public class GPU {
 		CLBlastSaxpy(n, alpha, xBuffer, 0, 1, yBuffer, 0, 1, commandQueue, event);
 
 		// Copy the result data back to the host
-		float result[] = new float[n];
+		float[] result = new float[n];
 		clEnqueueReadBuffer(commandQueue, yBuffer, true, 0, n
 			* Sizeof.cl_float, Pointer.to(result), 0, null, null);
 
