@@ -389,7 +389,7 @@ public class Convolutional implements Layer {
 							for (int f = 0; f < filterAmount; f++) {
 								for (int m = 0; m < filterSize; m++) {
 									for (int n = 0; n < filterSize; n++) {
-										// checks since kernels are flipped
+										// checks for full convolution
 										if ((j - n) < dilatedWidth && (i - m) < dilatedHeight && (j - n) >= 0 && (i - m) >= 0) {
 											int outputIndex = (j - n) + dilatedWidth * ((i - m) + dilatedHeight * (f + filterAmount * b));
 											int filterIndex = n + filterSize * (m + filterSize * (k + depth * f));

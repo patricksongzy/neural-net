@@ -1,13 +1,23 @@
 # neural-net
-A neural network implementation in Java. This implementation passes the current tests that have been implemented.
+A neural network implementation in Java, for ICS3U and ICS4U. This implementation passes the current tests that have been implemented.
 
-Please note: There is currently no versioning system for this project at the moment. Although the pom.xml file displays a version for the project, it is not updated.
 ## Project
 This project includes:
 * Convolutional, Fully-connected, Down-Sampling/Pooling, Dropout, GRU, Inception, Resnet, Batch Norm layers (and more).
 * ReLU, Identity/Linear, Sigmoid, Softmax and TanH Activations.
 * Cross-Entropy and Mean-Square-Error costs.
 * BLAS vectorization for some layers using JOCL and JOCLBlast.
+
+## Example Usage
+```java
+Model model = new Model.Builder().add(
+    new Convolutional.Builder().filterSize(7).filterAmount(64).pad(3).activationType(ActivationType.RELU)
+    .initializer(new Constant(0)).stride(2).updaterType(UpdaterType.ADAM).build()
+).add(
+    new Dense.Builder().outputSize(10).activation(OutputActivationType.SOFTMAX)
+    .initializer(new Constant(0)).updaterType(UpdaterType.ADAM).build()
+).cost(CostType.SPARSE_CROSS_ENTROPY).inputDimensions(224, 224, 3).build(); 
+```
 
 ## Problems
 * The Plot.java file is a mess, but is not essential to the program. It was merely created to show a general idea of training progress.

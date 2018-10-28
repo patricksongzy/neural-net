@@ -122,6 +122,7 @@ public class Pooling implements Layer {
 		switches = new boolean[batchSize * depth * padHeight * padWidth];
 		output = new float[batchSize * depth * downsampleHeight * downsampleWidth];
 
+		// TODO: Quick workaround to let padding work for invalid dimensions. These changes are still not reflected in backpropagation.
 		int roundWidth = (padWidth - downsampleSize) % downsampleStride != 0 ? 1 : 0;
 		int roundHeight = (padHeight - downsampleSize) % downsampleStride != 0 ? 1 : 0;
 
