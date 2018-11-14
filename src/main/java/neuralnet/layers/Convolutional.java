@@ -8,12 +8,15 @@ import neuralnet.initializers.Initializer;
 import neuralnet.optimizers.Updater;
 import neuralnet.optimizers.UpdaterType;
 import org.jocl.blast.CLBlastTranspose;
+import org.jocl.cl_mem;
 
 import java.io.DataInputStream;
 import java.io.DataOutputStream;
 import java.io.IOException;
 import java.util.logging.Level;
 import java.util.logging.Logger;
+
+import static org.jocl.CL.CL_MEM_READ_ONLY;
 
 /**
  * The convolutional layer revolves around convolutions in image processing. Using a similar method, filters are convolved around an image
@@ -299,6 +302,8 @@ public class Convolutional implements Layer {
 
 		// TODO: more efficient padding and dilations
 		float[] dilated = dilate(filters, dilation, filterAmount, depth, filterSize, filterSize);
+		cl_mem dilatedBuffer = GPU.gpuAlloc(CL_MEM_READ_ONLY, filterAmount * patchSize, dilated);
+		cl_mem biasBuffer = GPU.gpuAlloc(CL_MEM_READ_ONLY, outputHeight * outputWidth * filterAmount, biasMatrix);
 
 		for (int b = 0; b < batchSize; b++) {
 			float[] inputMatrix = new float[patchSize * outputHeight * outputWidth];
@@ -318,7 +323,7 @@ public class Convolutional implements Layer {
 			}
 
 			float[] conv = GPU.sgemm(CLBlastTranspose.CLBlastTransposeNo, CLBlastTranspose.CLBlastTransposeYes, outputHeight * outputWidth,
-				filterAmount, patchSize, inputMatrix, patchSize, dilated, patchSize, biasMatrix, filterAmount);
+				filterAmount, patchSize, inputMatrix, patchSize, dilatedBuffer, patchSize, biasBuffer, filterAmount);
 
 			for (int f = 0; f < filterAmount; f++) {
 				for (int i = 0; i < outputHeight * outputWidth; i++) {
@@ -326,6 +331,9 @@ public class Convolutional implements Layer {
 				}
 			}
 		}
+
+		GPU.gpuFree(dilatedBuffer);
+		GPU.gpuFree(biasBuffer);
 
 		// activation
 		activation.activation(output, batchSize);
@@ -440,10 +448,6 @@ public class Convolutional implements Layer {
 	}
 
 	public float[][][] getParameters() {
-		return new float[][][]{{filters, gradient}};//, {biases, biasGradient}};
-	}
-
-	public float[][][] getWeights() {
 		return new float[][][]{{filters, gradient}, {biases, biasGradient}};
 	}
 
