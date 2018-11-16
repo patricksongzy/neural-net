@@ -75,12 +75,16 @@ class ConvolutionalTest {
 	@Test
 	void convolutionTest() {
 		Convolutional convolutional = new Convolutional.Builder().filterAmount(2).activationType(ActivationType.RELU).filterSize(3)
-				.initializer(new HeInitialization()).pad(2).stride(2).updaterType(UpdaterType.ADAM).build();
+			.initializer(new HeInitialization()).pad(2).stride(2).updaterType(UpdaterType.ADAM).build();
 		convolutional.setDimensions(3, 3, 1);
 		float[] input = new float[]{
 			2, 1, 0,
 			2, 0, 1,
-			1, 2, 0,};
+			1, 2, 0,
+
+			2, 1, 0,
+			2, 0, 1,
+			1, 2, 0};
 
 		float[] updated = new float[]{
 			4, 2, 6,
@@ -89,13 +93,24 @@ class ConvolutionalTest {
 
 			4, 2, 6,
 			2, 4, 2,
+			6, 2, 2,
+
+			4, 2, 6,
+			2, 4, 2,
+			6, 2, 2,
+
+			4, 2, 6,
+			2, 4, 2,
 			6, 2, 2};
+
+		float[] target = new float[]{4, 14, 0, 18, 26, 2, 6, 8, 0, 4, 14, 0, 18, 26, 2, 6, 8, 0,
+			4, 14, 0, 18, 26, 2, 6, 8, 0, 4, 14, 0, 18, 26, 2, 6, 8, 0};
 
 		for (int i = 0; i < convolutional.getParameters()[0][0].length; i++) {
 			convolutional.getParameters()[0][0][i] = updated[i];
 		}
 
-		assertArrayEquals(new float[]{4, 14, 0, 18, 26, 2, 6, 8, 0, 4, 14, 0, 18, 26, 2, 6, 8, 0}, convolutional.forward(input, 1));
+		assertArrayEquals(target, convolutional.forward(input, 2));
 	}
 
 	@Test
@@ -182,8 +197,8 @@ class ConvolutionalTest {
 		).cost(CostType.MEAN_SQUARE_ERROR).inputDimensions(36, 36, 2).build();
 
 		// just a regular test
-		float[] input = new float[36 * 36 * 2];
-		float[] target = new float[10 * 10 * 12];
+		float[] input = new float[36 * 36 * 2 * 2];
+		float[] target = new float[10 * 10 * 12 * 2];
 
 		for (int i = 0; i < input.length; i++) {
 			input[i] = ThreadLocalRandom.current().nextFloat();
@@ -193,6 +208,6 @@ class ConvolutionalTest {
 			target[i] = ThreadLocalRandom.current().nextFloat();
 		}
 
-		assertTrue(model.gradientCheck(input, target, 1));
+		assertTrue(model.gradientCheck(input, target, 2));
 	}
 }

@@ -8,15 +8,12 @@ import neuralnet.initializers.Initializer;
 import neuralnet.optimizers.Updater;
 import neuralnet.optimizers.UpdaterType;
 import org.jocl.blast.CLBlastTranspose;
-import org.jocl.cl_mem;
 
 import java.io.DataInputStream;
 import java.io.DataOutputStream;
 import java.io.IOException;
 import java.util.logging.Level;
 import java.util.logging.Logger;
-
-import static org.jocl.CL.CL_MEM_READ_ONLY;
 
 /**
  * The convolutional layer revolves around convolutions in image processing. Using a similar method, filters are convolved around an image
@@ -159,10 +156,6 @@ public class Convolutional implements Layer {
 		return input;
 	}
 
-	public void setMode(Mode mode) {
-
-	}
-
 	static float[] removePad(float[] input, int batchSize, int pad, int depth, int padWidth, int inputHeight, int inputWidth) {
 		if (pad > 0) {
 			// creating an array, with the dimensions of the padded input
@@ -210,6 +203,10 @@ public class Convolutional implements Layer {
 		}
 
 		return input;
+	}
+
+	public void setMode(Mode mode) {
+
 	}
 
 	public void setDimensions(int... dimensions) {
@@ -292,24 +289,22 @@ public class Convolutional implements Layer {
 
 		int patchSize = dilatedSize * dilatedSize * depth;
 
-		float[] biasMatrix = new float[filterAmount * outputHeight * outputWidth];
+		float[] biasMatrix = new float[batchSize * filterAmount * outputHeight * outputWidth];
 
-		for (int f = 0; f < filterAmount; f++) {
-			for (int i = 0; i < outputHeight * outputWidth; i++) {
-				biasMatrix[f + filterAmount * i] = biases[f];
+		for (int b = 0; b < batchSize; b++) {
+			for (int f = 0; f < filterAmount; f++) {
+				for (int i = 0; i < outputHeight * outputWidth; i++) {
+					biasMatrix[f + filterAmount * (i + outputHeight * outputWidth * b)] = biases[f];
+				}
 			}
 		}
 
 		// TODO: more efficient padding and dilations
 		float[] dilated = dilate(filters, dilation, filterAmount, depth, filterSize, filterSize);
-		cl_mem dilatedBuffer = GPU.gpuAlloc(CL_MEM_READ_ONLY, filterAmount * patchSize, dilated);
-		cl_mem biasBuffer = GPU.gpuAlloc(CL_MEM_READ_ONLY, outputHeight * outputWidth * filterAmount, biasMatrix);
 
+		float[] inputMatrix = new float[patchSize * outputHeight * outputWidth * batchSize];
+		int inputIndex = 0;
 		for (int b = 0; b < batchSize; b++) {
-			float[] inputMatrix = new float[patchSize * outputHeight * outputWidth];
-
-			int inputIndex = 0;
-
 			for (int i = 0, h = 0; i < outputHeight; i++, h += stride) {
 				for (int j = 0, w = 0; j < outputWidth; j++, w += stride) {
 					for (int k = 0; k < depth; k++) {
@@ -321,19 +316,20 @@ public class Convolutional implements Layer {
 					}
 				}
 			}
+		}
 
-			float[] conv = GPU.sgemm(CLBlastTranspose.CLBlastTransposeNo, CLBlastTranspose.CLBlastTransposeYes, outputHeight * outputWidth,
-				filterAmount, patchSize, inputMatrix, patchSize, dilatedBuffer, patchSize, biasBuffer, filterAmount);
+		float[] conv = GPU.sgemm(CLBlastTranspose.CLBlastTransposeNo, CLBlastTranspose.CLBlastTransposeYes,
+			outputHeight * outputWidth * batchSize,
+			filterAmount, patchSize, inputMatrix, patchSize, dilated, patchSize, biasMatrix, filterAmount);
 
-			for (int f = 0; f < filterAmount; f++) {
-				for (int i = 0; i < outputHeight * outputWidth; i++) {
-					output[i + (outputWidth * outputHeight) * (f + filterAmount * b)] = conv[f + filterAmount * i];
+		for (int f = 0; f < filterAmount; f++) {
+			for (int i = 0; i < outputHeight * outputWidth; i++) {
+				for (int b = 0; b < batchSize; b++) {
+					output[i + (outputWidth * outputHeight) * (f + filterAmount * b)] =
+						conv[f + filterAmount * (i + outputHeight * outputWidth * b)];
 				}
 			}
 		}
-
-		GPU.gpuFree(dilatedBuffer);
-		GPU.gpuFree(biasBuffer);
 
 		// activation
 		activation.activation(output, batchSize);

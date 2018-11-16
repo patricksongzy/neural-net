@@ -124,44 +124,9 @@ public class GPU {
 			* Sizeof.cl_float, Pointer.to(result), 0, null, null);
 
 		// Clean up
-		gpuFree(aBuffer);
-		gpuFree(bBuffer);
-		gpuFree(cBuffer);
-		clReleaseEvent(event);
-
-		return result;
-	}
-
-	public static cl_mem gpuAlloc(long flags, int size, float[] values) {
-		cl_mem buffer = clCreateBuffer(context, flags, size
-			* Sizeof.cl_float, null, null);
-
-		clEnqueueWriteBuffer(commandQueue, buffer, true, 0, size
-			* Sizeof.cl_float, Pointer.to(values), 0, null, null);
-
-		return buffer;
-	}
-
-	public static void gpuFree(cl_mem buffer) {
-		clReleaseMemObject(buffer);
-	}
-
-	public static float[] sgemm(int aTranspose, int bTranspose, int m, int n, int k, float[] a, int lda, cl_mem b, int ldb,
-								cl_mem c, int ldc) {
-		// Create the device input buffers
-		cl_mem aBuffer = gpuAlloc(CL_MEM_READ_ONLY, m * k, a);
-
-		cl_event event = new cl_event();
-		CLBlastSgemm(CLBlastLayout.CLBlastLayoutRowMajor, aTranspose, bTranspose,
-			m, n, k, 1, aBuffer, 0, lda, b, 0, ldb, 1, c, 0, ldc, commandQueue, event);
-
-		// Copy the result data back to the host
-		float[] result = new float[m * n];
-		clEnqueueReadBuffer(commandQueue, c, true, 0, m * n
-			* Sizeof.cl_float, Pointer.to(result), 0, null, null);
-
-		// Clean up
-		gpuFree(aBuffer);
+		clReleaseMemObject(aBuffer);
+		clReleaseMemObject(bBuffer);
+		clReleaseMemObject(cBuffer);
 		clReleaseEvent(event);
 
 		return result;
@@ -181,10 +146,20 @@ public class GPU {
 			* Sizeof.cl_float, Pointer.to(result), 0, null, null);
 
 		// Clean up
-		gpuFree(xBuffer);
-		gpuFree(yBuffer);
+		clReleaseMemObject(xBuffer);
+		clReleaseMemObject(yBuffer);
 		clReleaseEvent(event);
 
 		return result;
+	}
+
+	private static cl_mem gpuAlloc(long flags, int size, float[] values) {
+		cl_mem buffer = clCreateBuffer(context, flags, size
+			* Sizeof.cl_float, null, null);
+
+		clEnqueueWriteBuffer(commandQueue, buffer, true, 0, size
+			* Sizeof.cl_float, Pointer.to(values), 0, null, null);
+
+		return buffer;
 	}
 }
