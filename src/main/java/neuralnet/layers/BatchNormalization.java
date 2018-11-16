@@ -195,7 +195,7 @@ public class BatchNormalization implements Layer {
 	}
 
 	/**
-	 * Builder for BatchNormalization branch2.
+	 * Builder for BatchNormalization layers.
 	 */
 	@SuppressWarnings({"unused", "WeakerAccess"})
 	public static class Builder {

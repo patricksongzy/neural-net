@@ -61,7 +61,12 @@ public interface Layer {
 	 */
 	float[] backward(float[] previousDelta, boolean calculateDelta);
 
-	void update(int size);
+	/**
+	 * Updates a layer's parameters.
+	 *
+	 * @param scale the scale
+	 */
+	void update(int scale);
 
 	/**
 	 * Gets the output dimensions, for initializing following layers.

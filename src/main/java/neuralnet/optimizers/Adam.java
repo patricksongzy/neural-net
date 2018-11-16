@@ -1,7 +1,5 @@
 package neuralnet.optimizers;
 
-import neuralnet.GPU;
-
 import java.io.DataInputStream;
 import java.io.DataOutputStream;
 import java.io.IOException;
@@ -22,14 +20,14 @@ public class Adam implements Updater {
 	private int t = 0;
 	private float[] m, v;
 
-	public Adam(int size) {
+	Adam(int size) {
 		this.size = size;
 
 		m = new float[size];
 		v = new float[size];
 	}
 
-	public Adam(DataInputStream dis) throws IOException {
+	Adam(DataInputStream dis) throws IOException {
 		size = dis.readInt();
 		t = dis.readInt();
 
@@ -82,9 +80,8 @@ public class Adam implements Updater {
 		dos.writeFloat(learningRate);
 	}
 
-	public float[] update(float[] gradient) {
+	public void update(float[] parameters, float[] gradient, int scale) {
 		t++;
-		float[] update = new float[size];
 
 		float b1 = 1 - beta1;
 		float b2 = 1 - beta2;
@@ -92,16 +89,11 @@ public class Adam implements Updater {
 		float mt = 1 - (float) Math.pow(beta1, t);
 		float vt = 1 - (float) Math.pow(beta2, t);
 
-		m = GPU.saxpy(size, beta1, m, GPU.saxpy(size, b1, gradient, new float[size]));
-
-		float[] bv = GPU.saxpy(size, beta2, v, new float[size]);
-
 		IntStream.range(0, size).parallel().forEach(i -> {
-			v[i] = bv[i] + b2 * gradient[i] * gradient[i];
-			update[i] = (float) -((learningRate * (m[i] / mt)) / (Math.sqrt(v[i] / vt) + epsilon));
+			m[i] = m[i] * beta1 + b1 * gradient[i];
+			v[i] = beta2 * v[i] + b2 * gradient[i] * gradient[i];
+			parameters[i] -= (float) ((learningRate * (m[i] / mt)) / (Math.sqrt(v[i] / vt) + epsilon)) / scale;
 		});
-
-		return update;
 	}
 
 	public void export(DataOutputStream dos) throws IOException {

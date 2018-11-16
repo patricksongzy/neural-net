@@ -10,10 +10,11 @@ public interface Updater {
 	/**
 	 * Calculates the delta for the parameters.
 	 *
+	 * @param parameters the parameters
 	 * @param gradient the parameter gradient
-	 * @return the delta
+	 * @param scale the scale
 	 */
-	float[] update(float[] gradient);
+	void update(float[] parameters, float[] gradient, int scale);
 
 	/**
 	 * Export the parameter specific parameters to an output stream.

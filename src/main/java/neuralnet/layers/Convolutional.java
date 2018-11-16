@@ -421,26 +421,9 @@ public class Convolutional implements Layer {
 		return removePad(input, batchSize, pad, depth, padWidth, inputHeight, inputWidth);
 	}
 
-	/**
-	 * Update the parameters given gradients.
-	 */
-	public void update(int size) {
-		float[] biasUpdate = biasUpdater.update(biasGradient);
-		float[] filterUpdate = filterUpdater.update(gradient);
-
-		for (int f = 0; f < filterAmount; f++) {
-			biases[f] += biasUpdate[f] / size;
-
-			for (int k = 0; k < depth; k++) {
-				for (int m = 0; m < filterSize; m++) {
-					for (int n = 0; n < filterSize; n++) {
-						int filterIndex = n + filterSize * (m + filterSize * (k + depth * f));
-
-						filters[filterIndex] += filterUpdate[filterIndex] / size;
-					}
-				}
-			}
-		}
+	public void update(int scale) {
+		biasUpdater.update(biases, biasGradient, scale);
+		filterUpdater.update(filters, gradient, scale);
 	}
 
 	public float[][][] getParameters() {

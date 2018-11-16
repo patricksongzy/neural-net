@@ -22,14 +22,22 @@ public class GRU implements Layer {
 	private int batchSize;
 	private int inputSize, outputSize;
 
+	// weights
 	private float[] wz, wr, wh;
+	// pre-transposed weights
 	private float[] wzT, wrT, whT;
+	// weight gradients
 	private float[] dWz, dWr, dWh;
+	// biases
 	private float[] bz, br, bh;
+	// bias gradients
 	private float[] dBz, dBr, dBh;
 
+	// state
 	private float[] h;
+	// derivative
 	private float[] dh;
+	// outputs stored in linked list
 	private LinkedList<float[]> xh, xrh, z, r, hc, y;
 
 	private Initializer initializer;
@@ -246,9 +254,11 @@ public class GRU implements Layer {
 	public float[] forward(float[] input, int batchSize) {
 		this.batchSize = batchSize;
 
+		// checking if first in series
 		if (h == null) {
 			h = new float[batchSize * outputSize];
 
+			// initializing h for gradient check
 			if (mode == Mode.GRADIENT_CHECK)
 				Arrays.fill(h, 0.1f);
 		}
@@ -263,6 +273,7 @@ public class GRU implements Layer {
 		float[] r = new float[batchSize * outputSize];
 		float[] y = new float[batchSize * outputSize];
 
+		// copying biases to outputs
 		for (int b = 0; b < batchSize; b++) {
 			System.arraycopy(bz, 0, z, outputSize * b, outputSize);
 			System.arraycopy(br, 0, r, outputSize * b, outputSize);
@@ -300,6 +311,7 @@ public class GRU implements Layer {
 
 		System.arraycopy(h, 0, y, 0, batchSize * outputSize);
 
+		// adding items to linked list for backpropagation
 		this.xh.push(xh);
 		this.xrh.push(xrh);
 		this.hc.push(hc);
@@ -325,6 +337,7 @@ public class GRU implements Layer {
 		float[] dz = new float[batchSize * outputSize];
 		float[] dhc = new float[batchSize * outputSize];
 
+		// popping values to go backwards from time
 		float[] xh = this.xh.pop();
 		float[] xrh = this.xrh.pop();
 		float[] hc = this.hc.pop();
@@ -373,6 +386,7 @@ public class GRU implements Layer {
 			System.arraycopy(delta, inputSize + (inputSize + outputSize) * b, dh, outputSize * b, outputSize);
 		}
 
+		// updating parameters
 		dWz = GPU.sgemm(CLBlastTranspose.CLBlastTransposeYes, CLBlastTranspose.CLBlastTransposeNo, outputSize,
 			inputSize + outputSize, batchSize, dz, outputSize, xh, inputSize + outputSize, dWz, inputSize + outputSize);
 		dWr = GPU.sgemm(CLBlastTranspose.CLBlastTransposeYes, CLBlastTranspose.CLBlastTransposeNo, outputSize,
@@ -397,28 +411,22 @@ public class GRU implements Layer {
 		return new float[][][]{{wz, dWz}, {wr, dWr}, {wh, dWh}, {bz, dBz}, {br, dBr}, {bh, dBh}};
 	}
 
-	public void update(int size) {
-		float[] wzUpdate = weightUpdaters[0].update(dWz);
-		float[] wrUpdate = weightUpdaters[1].update(dWr);
-		float[] whUpdate = weightUpdaters[2].update(dWh);
+	public void update(int scale) {
+		weightUpdaters[0].update(wz, dWz, scale);
+		weightUpdaters[1].update(wr, dWr, scale);
+		weightUpdaters[2].update(wh, dWh, scale);
 
-		float[] bzUpdate = biasUpdaters[0].update(dBz);
-		float[] brUpdate = biasUpdaters[1].update(dBr);
-		float[] bhUpdate = biasUpdaters[2].update(dBh);
-
-		wz = GPU.saxpy(wz.length, 1.0f / size, wzUpdate, wz);
-		wr = GPU.saxpy(wr.length, 1.0f / size, wrUpdate, wr);
-		wh = GPU.saxpy(wh.length, 1.0f / size, whUpdate, wh);
-
-		bz = GPU.saxpy(bz.length, 1.0f / size, bzUpdate, bz);
-		br = GPU.saxpy(br.length, 1.0f / size, brUpdate, br);
-		bh = GPU.saxpy(bh.length, 1.0f / size, bhUpdate, bh);
+		biasUpdaters[0].update(bz, dBz, scale);
+		biasUpdaters[1].update(br, dBr, scale);
+		biasUpdaters[2].update(bh, dBh, scale);
 
 		transposeWeights();
 
+		// clearing states
 		h = null;
 		dh = null;
 
+		// clearing gradients
 		dWz = new float[outputSize * inputSize + outputSize * outputSize];
 		dWr = new float[outputSize * inputSize + outputSize * outputSize];
 		dWh = new float[outputSize * inputSize + outputSize * outputSize];
@@ -427,6 +435,7 @@ public class GRU implements Layer {
 		dBr = new float[outputSize];
 		dBh = new float[outputSize];
 
+		// clearing history
 		xh.clear();
 		xrh.clear();
 		hc.clear();

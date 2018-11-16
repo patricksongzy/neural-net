@@ -204,15 +204,9 @@ public class Dense implements Layer {
 		return delta;
 	}
 
-	/**
-	 * Updates parameters given gradients.
-	 */
-	public void update(int size) {
-		float[] update = weightUpdater.update(gradient);
-		float[] biasUpdate = biasUpdater.update(biasGradient);
-
-		weights = GPU.saxpy(weights.length, 1.0f / size, update, weights);
-		biases = GPU.saxpy(biases.length, 1.0f / size, biasUpdate, biases);
+	public void update(int scale) {
+		weightUpdater.update(weights, gradient, scale);
+		biasUpdater.update(biases, biasGradient, scale);
 
 		gradient = new float[outputSize * inputSize];
 		biasGradient = new float[outputSize];
