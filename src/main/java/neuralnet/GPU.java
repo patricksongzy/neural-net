@@ -131,6 +131,28 @@ public class GPU {
 		return result;
 	}
 
+	public static float[] sgemm(int aTranspose, int bTranspose, int m, int n, int k, float[] a, int lda, cl_mem bBuffer, int ldb,
+								float[] c, int ldc) {
+		cl_mem aBuffer = gpuAlloc(CL_MEM_READ_ONLY, m * k, a);
+		cl_mem cBuffer = gpuAlloc(CL_MEM_READ_WRITE, m * n, c);
+
+		cl_event event = new cl_event();
+		CLBlastSgemm(CLBlastLayout.CLBlastLayoutRowMajor, aTranspose, bTranspose,
+			m, n, k, 1, aBuffer, 0, lda, bBuffer, 0, ldb, 1, cBuffer, 0, ldc, commandQueue, event);
+
+		// Copy the result data back to the host
+		float[] result = new float[m * n];
+		clEnqueueReadBuffer(commandQueue, cBuffer, true, 0, m * n
+			* Sizeof.cl_float, Pointer.to(result), 0, null, null);
+
+		// Clean up
+		clReleaseMemObject(aBuffer);
+		clReleaseMemObject(cBuffer);
+		clReleaseEvent(event);
+
+		return result;
+	}
+
 	public static float[] saxpy(int n, float alpha, float[] x, cl_mem yBuffer) {
 		// Create the device input buffers
 		cl_mem xBuffer = gpuAlloc(CL_MEM_READ_ONLY, n, x);
@@ -163,7 +185,7 @@ public class GPU {
 		return xBuffer;
 	}
 
-	static cl_mem gpuAlloc(long flags, int size, float[] values) {
+	public static cl_mem gpuAlloc(long flags, int size, float[] values) {
 		cl_mem buffer = clCreateBuffer(context, flags, size
 			* Sizeof.cl_float, null, null);
 

@@ -407,20 +407,19 @@ public class Convolutional implements Layer {
 			}
 
 			float[] transposed = new float[filters.length];
-			int transposedIndex = 0;
 			for (int k = 0; k < depth; k++) {
 				for (int f = 0; f < filterAmount; f++) {
 					for (int m = 0; m < filterSize; m++) {
 						for (int n = 0; n < filterSize; n++) {
 							int index = n + filterSize * (m + filterSize * (k + depth * f));
-							transposed[transposedIndex++] = filters[index];
+							transposed[k + depth * (n + filterSize * (m + filterSize * f))] = filters[index];
 						}
 					}
 				}
 			}
 
-			float[] conv = GPU.sgemm(CLBlastTranspose.CLBlastTransposeNo, CLBlastTranspose.CLBlastTransposeYes,
-				padHeight * padWidth * batchSize, depth, patchSize, inputMatrix, patchSize, transposed, patchSize,
+			float[] conv = GPU.sgemm(CLBlastTranspose.CLBlastTransposeNo, CLBlastTranspose.CLBlastTransposeNo,
+				padHeight * padWidth * batchSize, depth, patchSize, inputMatrix, patchSize, transposed, depth,
 				new float[batchSize * padHeight * padWidth * depth], depth);
 
 			for (int k = 0; k < depth; k++) {

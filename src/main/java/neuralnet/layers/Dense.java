@@ -8,7 +8,9 @@ import neuralnet.initializers.HeInitialization;
 import neuralnet.initializers.Initializer;
 import neuralnet.optimizers.Updater;
 import neuralnet.optimizers.UpdaterType;
+import org.jocl.CL;
 import org.jocl.blast.CLBlastTranspose;
+import org.jocl.cl_mem;
 
 import java.io.DataInputStream;
 import java.io.DataOutputStream;
@@ -31,6 +33,7 @@ public class Dense implements Layer {
 	private Updater weightUpdater;
 	private Updater biasUpdater;
 	private float[] weights, biases;
+	private cl_mem weightBuffer;
 	private float[] gradient, biasGradient;
 	private float[] input, output;
 
@@ -151,8 +154,9 @@ public class Dense implements Layer {
 		for (int b = 0; b < batchSize; b++)
 			System.arraycopy(biases, 0, output, b * outputSize, outputSize);
 
+		weightBuffer = GPU.gpuAlloc(CL.CL_MEM_READ_ONLY, inputSize * outputSize, weights);
 		output = GPU.sgemm(CLBlastTranspose.CLBlastTransposeNo, CLBlastTranspose.CLBlastTransposeYes, batchSize,
-			outputSize, inputSize, input, inputSize, weights, inputSize, output, outputSize);
+			outputSize, inputSize, input, inputSize, weightBuffer, inputSize, output, outputSize);
 
 		if (mode == Mode.EVAL && temperature != 1) {
 			for (int i = 0; i < batchSize; i++) {
@@ -198,8 +202,10 @@ public class Dense implements Layer {
 
 		if (calculateDelta) {
 			delta = GPU.sgemm(CLBlastTranspose.CLBlastTransposeNo, CLBlastTranspose.CLBlastTransposeNo, batchSize,
-				inputSize, outputSize, previousDelta, outputSize, weights, inputSize, delta, inputSize);
+				inputSize, outputSize, previousDelta, outputSize, weightBuffer, inputSize, delta, inputSize);
 		}
+
+		CL.clReleaseMemObject(weightBuffer);
 
 		return delta;
 	}
