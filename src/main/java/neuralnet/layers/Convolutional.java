@@ -290,7 +290,6 @@ public class Convolutional implements Layer {
 		int patchSize = dilatedSize * dilatedSize * depth;
 
 		float[] biasMatrix = new float[batchSize * filterAmount * outputHeight * outputWidth];
-
 		for (int b = 0; b < batchSize; b++) {
 			for (int f = 0; f < filterAmount; f++) {
 				for (int i = 0; i < outputHeight * outputWidth; i++) {
@@ -319,8 +318,8 @@ public class Convolutional implements Layer {
 		}
 
 		float[] conv = GPU.sgemm(CLBlastTranspose.CLBlastTransposeNo, CLBlastTranspose.CLBlastTransposeYes,
-			outputHeight * outputWidth * batchSize,
-			filterAmount, patchSize, inputMatrix, patchSize, dilated, patchSize, biasMatrix, filterAmount);
+			outputHeight * outputWidth * batchSize, filterAmount, patchSize, inputMatrix, patchSize, dilated, patchSize, biasMatrix,
+			filterAmount);
 
 		for (int f = 0; f < filterAmount; f++) {
 			for (int i = 0; i < outputHeight * outputWidth; i++) {
@@ -383,27 +382,51 @@ public class Convolutional implements Layer {
 			int dilatedHeight = (outputHeight - 1) * (stride - 1) + outputHeight;
 			int dilatedWidth = (outputWidth - 1) * (stride - 1) + outputWidth;
 
-			// calculating delta
+			int patchSize = filterSize * filterSize * filterAmount;
+
+			float[] inputMatrix = new float[patchSize * padHeight * padWidth * batchSize];
+			int inputIndex = 0;
 			for (int b = 0; b < batchSize; b++) {
-				for (int k = 0; k < depth; k++) {
-					for (int i = 0; i < padHeight; i++) {
-						for (int j = 0; j < padWidth; j++) {
-							int deltaIndex = j + padWidth * (i + padHeight * (k + depth * b));
-
-							for (int f = 0; f < filterAmount; f++) {
-								for (int m = 0; m < filterSize; m++) {
-									for (int n = 0; n < filterSize; n++) {
-										// checks for full convolution
-										if ((j - n) < dilatedWidth && (i - m) < dilatedHeight && (j - n) >= 0 && (i - m) >= 0) {
-											int outputIndex = (j - n) + dilatedWidth * ((i - m) + dilatedHeight * (f + filterAmount * b));
-											int filterIndex = n + filterSize * (m + filterSize * (k + depth * f));
-
-											delta[deltaIndex] += previousDelta[outputIndex] * filters[filterIndex];
-										}
+				for (int i = 0; i < padHeight; i++) {
+					for (int j = 0; j < padWidth; j++) {
+						for (int f = 0; f < filterAmount; f++) {
+							for (int m = 0; m < filterSize; m++) {
+								for (int n = 0; n < filterSize; n++) {
+									// checks for full convolution
+									if ((j - n) < dilatedWidth && (i - m) < dilatedHeight && (j - n) >= 0 && (i - m) >= 0) {
+										int outputIndex = (j - n) + dilatedWidth * ((i - m) + dilatedHeight * (f + filterAmount * b));
+										inputMatrix[inputIndex] = previousDelta[outputIndex];
 									}
+
+									inputIndex++;
 								}
 							}
 						}
+					}
+				}
+			}
+
+			float[] transposed = new float[filters.length];
+			int transposedIndex = 0;
+			for (int k = 0; k < depth; k++) {
+				for (int f = 0; f < filterAmount; f++) {
+					for (int m = 0; m < filterSize; m++) {
+						for (int n = 0; n < filterSize; n++) {
+							int index = n + filterSize * (m + filterSize * (k + depth * f));
+							transposed[transposedIndex++] = filters[index];
+						}
+					}
+				}
+			}
+
+			float[] conv = GPU.sgemm(CLBlastTranspose.CLBlastTransposeNo, CLBlastTranspose.CLBlastTransposeYes,
+				padHeight * padWidth * batchSize, depth, patchSize, inputMatrix, patchSize, transposed, patchSize,
+				new float[batchSize * padHeight * padWidth * depth], depth);
+
+			for (int k = 0; k < depth; k++) {
+				for (int i = 0; i < padHeight * padWidth; i++) {
+					for (int b = 0; b < batchSize; b++) {
+						delta[i + padHeight * padWidth * (k + depth * b)] = conv[k + depth * (i + padHeight * padWidth * b)];
 					}
 				}
 			}

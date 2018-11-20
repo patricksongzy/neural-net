@@ -1,5 +1,7 @@
 package neuralnet.optimizers;
 
+import neuralnet.GPU;
+
 import java.io.DataInputStream;
 import java.io.DataOutputStream;
 import java.io.IOException;
@@ -89,11 +91,20 @@ public class Adam implements Updater {
 		float mt = 1 - (float) Math.pow(beta1, t);
 		float vt = 1 - (float) Math.pow(beta2, t);
 
-		IntStream.range(0, size).parallel().forEach(i -> {
-			m[i] = m[i] * beta1 + b1 * gradient[i];
-			v[i] = beta2 * v[i] + b2 * gradient[i] * gradient[i];
-			parameters[i] -= (float) ((learningRate * (m[i] / mt)) / (Math.sqrt(v[i] / vt) + epsilon)) / scale;
-		});
+		if (size > 256) {
+			m = GPU.saxpy(size, beta1, m, GPU.sscal(size, b1, gradient));
+
+			IntStream.range(0, size).parallel().forEach(i -> {
+				v[i] = v[i] * beta2 + b2 * gradient[i] * gradient[i];
+				parameters[i] -= (float) ((learningRate * (m[i] / mt)) / (Math.sqrt(v[i] / vt) + epsilon)) / scale;
+			});
+		} else {
+			IntStream.range(0, size).parallel().forEach(i -> {
+				m[i] = m[i] * beta1 + b1 * gradient[i];
+				v[i] = beta2 * v[i] + b2 * gradient[i] * gradient[i];
+				parameters[i] -= (float) ((learningRate * (m[i] / mt)) / (Math.sqrt(v[i] / vt) + epsilon)) / scale;
+			});
+		}
 	}
 
 	public void export(DataOutputStream dos) throws IOException {

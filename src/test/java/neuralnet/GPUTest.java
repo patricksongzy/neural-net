@@ -1,5 +1,6 @@
 package neuralnet;
 
+import org.jocl.CL;
 import org.jocl.blast.CLBlastTranspose;
 import org.junit.jupiter.api.Test;
 
@@ -18,9 +19,10 @@ class GPUTest {
 
 	@Test
 	void saxpy() {
+		int n = 5;
 		float[] a = new float[]{1, 2, 3, 4, 5};
 		float[] b = new float[]{5, 4, 3, 2, 1};
 
-		assertArrayEquals(new float[]{5.5f, 5, 4.5f, 4, 3.5f}, GPU.saxpy(5, 0.5f, a, b));
+		assertArrayEquals(new float[]{5.5f, 5, 4.5f, 4, 3.5f}, GPU.saxpy(n, 0.5f, a, GPU.gpuAlloc(CL.CL_MEM_READ_ONLY, n, b)));
 	}
 }

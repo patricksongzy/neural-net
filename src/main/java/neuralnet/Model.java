@@ -384,8 +384,6 @@ public class Model {
 	 * @param file the file
 	 */
 	public void export(String file) {
-		file += ".model";
-
 		try (DataOutputStream dos = new DataOutputStream(new BufferedOutputStream(new FileOutputStream(file, false), 16384))) {
 			System.out.println("Exporting to: " + file);
 

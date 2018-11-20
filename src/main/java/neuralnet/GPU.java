@@ -5,8 +5,7 @@ import org.jocl.blast.CLBlast;
 import org.jocl.blast.CLBlastLayout;
 
 import static org.jocl.CL.*;
-import static org.jocl.blast.CLBlast.CLBlastSaxpy;
-import static org.jocl.blast.CLBlast.CLBlastSgemm;
+import static org.jocl.blast.CLBlast.*;
 
 public class GPU {
 	private static cl_context context;
@@ -132,10 +131,9 @@ public class GPU {
 		return result;
 	}
 
-	public static float[] saxpy(int n, float alpha, float[] x, float[] y) {
+	public static float[] saxpy(int n, float alpha, float[] x, cl_mem yBuffer) {
 		// Create the device input buffers
 		cl_mem xBuffer = gpuAlloc(CL_MEM_READ_ONLY, n, x);
-		cl_mem yBuffer = gpuAlloc(CL_MEM_READ_ONLY, n, y);
 
 		cl_event event = new cl_event();
 		CLBlastSaxpy(n, alpha, xBuffer, 0, 1, yBuffer, 0, 1, commandQueue, event);
@@ -153,7 +151,19 @@ public class GPU {
 		return result;
 	}
 
-	private static cl_mem gpuAlloc(long flags, int size, float[] values) {
+	public static cl_mem sscal(int n, float alpha, float[] x) {
+		// Create the device input buffers
+		cl_mem xBuffer = gpuAlloc(CL_MEM_READ_ONLY, n, x);
+
+		cl_event event = new cl_event();
+		CLBlastSscal(n, alpha, xBuffer, 0, 1, commandQueue, event);
+
+		clReleaseEvent(event);
+
+		return xBuffer;
+	}
+
+	static cl_mem gpuAlloc(long flags, int size, float[] values) {
 		cl_mem buffer = clCreateBuffer(context, flags, size
 			* Sizeof.cl_float, null, null);
 
