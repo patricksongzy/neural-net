@@ -375,7 +375,9 @@ public class Convolutional implements Layer {
 		float[] result = GPU.sgemm(CLBlastTranspose.CLBlastTransposeYes, CLBlastTranspose.CLBlastTransposeNo,
 			patchSize, filterAmount, outputHeight * outputWidth * batchSize, inputBuffer, patchSize,
 			deltaBuffer, filterAmount, new float[patchSize * filterAmount], filterAmount);
+
 		CL.clReleaseMemObject(deltaBuffer);
+		CL.clReleaseMemObject(inputBuffer);
 
 		for (int f = 0; f < filterAmount; f++) {
 			for (int i = 0; i < patchSize; i++) {
