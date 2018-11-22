@@ -153,9 +153,8 @@ public class GPU {
 		return result;
 	}
 
-	public static float[] sgemm(int aTranspose, int bTranspose, int m, int n, int k, float[] a, int lda, cl_mem bBuffer, int ldb,
+	public static float[] sgemm(int aTranspose, int bTranspose, int m, int n, int k, cl_mem aBuffer, int lda, cl_mem bBuffer, int ldb,
 								float[] c, int ldc) {
-		cl_mem aBuffer = gpuAlloc(CL_MEM_READ_ONLY, m * k, a);
 		cl_mem cBuffer = gpuAlloc(CL_MEM_READ_WRITE, m * n, c);
 
 		cl_event event = new cl_event();
@@ -168,7 +167,6 @@ public class GPU {
 			* Sizeof.cl_float, Pointer.to(result), 0, null, null);
 
 		// Clean up
-		clReleaseMemObject(aBuffer);
 		clReleaseMemObject(cBuffer);
 		clReleaseEvent(event);
 

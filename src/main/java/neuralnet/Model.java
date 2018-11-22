@@ -7,7 +7,9 @@ import neuralnet.layers.LayerType;
 
 import java.io.*;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.Callable;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.ThreadPoolExecutor;
@@ -112,11 +114,11 @@ public class Model {
 	/**
 	 * Backpropagates layers, by calculating gradients.
 	 *
-	 * @param target the target
+	 * @param targets the targets
 	 */
 	@SuppressWarnings("WeakerAccess")
-	public void backward(float[] target) {
-		float[] delta = layers[layers.length - 1].backward(cost, target, layers.length > 1);
+	public void backward(float[] targets) {
+		float[] delta = layers[layers.length - 1].backward(cost, targets, layers.length > 1);
 
 		for (int i = layers.length - 2; i >= 0; i--)
 			delta = layers[i].backward(delta, i > 0);
@@ -142,6 +144,54 @@ public class Model {
 		tasks.clear();
 	}
 
+	public void train(Map<float[], Float> data, int batchSize, int epochs) {
+		// setting mode to training mode
+		setMode(Layer.Mode.TRAIN);
+
+		List<float[]> keys = new ArrayList<>(data.keySet());
+
+		int inputSize = keys.get(0).length;
+
+		for (int i = 1; i <= epochs; i++) {
+			// shuffling data prevents the neural network from learning the order of the data
+			Collections.shuffle(keys);
+
+			// looping through the training set
+			for (int j = 0, batch = 1; j < keys.size(); j += batchSize, batch++) {
+				// calculating the batch size
+				int s = (j + batchSize) > keys.size() ? (keys.size() % batchSize) : batchSize;
+
+				float[] inputs = new float[s * inputSize];
+				float[] targets = new float[s];
+
+				// creating a batch
+				for (int b = 0; b < s; b++) {
+					float[] input = keys.get(b + j);
+					System.arraycopy(input, 0, inputs, b * inputSize, inputSize);
+					targets[b] = data.get(input);
+				}
+
+				// forward propagating the batch
+				float[] output = forward(inputs, s);
+
+				// back propagating batch
+				backward(targets);
+
+				update(s);
+
+				int progress = (int) ((float) j / keys.size() * 30 + 0.5);
+				System.out.printf("\r%d/%d [", j, keys.size());
+
+				for (int k = 0; k < progress; k++)
+					System.out.print("#");
+				for (int k = progress; k < 30; k++)
+					System.out.print("-");
+
+				System.out.print("] - loss: " + cost.cost(output, targets) / s);
+			}
+		}
+	}
+
 	/**
 	 * Sets the mode on each layer.
 	 *
@@ -153,6 +203,13 @@ public class Model {
 			layer.setMode(mode);
 	}
 
+	/**
+	 * Forward propagates recurrent layers in an efficient manner.
+	 *
+	 * @param x         the input
+	 * @param batchSize the batch size
+	 * @return the output
+	 */
 	public float[][] forward(float[][] x, int batchSize) {
 		float[][] output = new float[x.length][];
 		for (int i = 0; i < x.length; i++) {
@@ -187,6 +244,11 @@ public class Model {
 		return output;
 	}
 
+	/**
+	 * Back propagates recurrent layers in an efficient manner.
+	 *
+	 * @param targets the targets
+	 */
 	@SuppressWarnings("WeakerAccess")
 	public void backward(float[][] targets) {
 		float[][] delta = new float[targets.length][];
@@ -385,18 +447,14 @@ public class Model {
 	 */
 	public void export(String file) {
 		try (DataOutputStream dos = new DataOutputStream(new BufferedOutputStream(new FileOutputStream(file, false), 16384))) {
-			System.out.println("Exporting to: " + file);
-
 			// exporting layer amount
 			dos.writeInt(layers.length);
 			dos.writeInt(inputSize);
 
 			// exporting layers
-			for (int i = 0; i < layers.length; i++) {
-				System.out.println("Exporting layer " + (i + 1) + " / " + layers.length);
-				layers[i].getType().export(dos);
-				layers[i].export(dos);
-				System.out.println("Exported layer " + (i + 1) + " / " + layers.length + " of type " + layers[i].getType());
+			for (Layer layer : layers) {
+				layer.getType().export(dos);
+				layer.export(dos);
 			}
 
 			// exporting cost
@@ -404,8 +462,6 @@ public class Model {
 		} catch (IOException e) {
 			e.printStackTrace();
 		}
-
-		System.out.println("Exported to: " + file);
 	}
 
 	/**

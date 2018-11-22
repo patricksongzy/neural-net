@@ -33,9 +33,9 @@ public class Dense implements Layer {
 	private Updater weightUpdater;
 	private Updater biasUpdater;
 	private float[] weights, biases;
-	private cl_mem weightBuffer;
 	private float[] gradient, biasGradient;
-	private float[] input, output;
+	private float[] output;
+	private cl_mem inputBuffer, weightBuffer;
 
 	/**
 	 * Initializes a Dense layer neural network from a file.
@@ -147,16 +147,16 @@ public class Dense implements Layer {
 
 	public float[] forward(float[] input, int batchSize) {
 		this.batchSize = batchSize;
-		this.input = input;
 
 		output = new float[batchSize * outputSize];
 
 		for (int b = 0; b < batchSize; b++)
 			System.arraycopy(biases, 0, output, b * outputSize, outputSize);
 
-		weightBuffer = GPU.gpuAlloc(CL.CL_MEM_READ_ONLY, inputSize * outputSize, weights);
+		inputBuffer = GPU.gpuAlloc(CL.CL_MEM_READ_ONLY, input.length, input);
+		weightBuffer = GPU.gpuAlloc(CL.CL_MEM_READ_ONLY, weights.length, weights);
 		output = GPU.sgemm(CLBlastTranspose.CLBlastTransposeNo, CLBlastTranspose.CLBlastTransposeYes, batchSize,
-			outputSize, inputSize, input, inputSize, weightBuffer, inputSize, output, outputSize);
+			outputSize, inputSize, inputBuffer, inputSize, weightBuffer, inputSize, output, outputSize);
 
 		if (mode == Mode.EVAL && temperature != 1) {
 			for (int i = 0; i < batchSize; i++) {
@@ -195,20 +195,26 @@ public class Dense implements Layer {
 			}
 		}
 
+		cl_mem deltaBuffer = GPU.gpuAlloc(CL.CL_MEM_READ_ONLY, previousDelta.length, previousDelta);
+
 		gradient = GPU.sgemm(CLBlastTranspose.CLBlastTransposeYes, CLBlastTranspose.CLBlastTransposeNo, outputSize,
-			inputSize, batchSize, previousDelta, outputSize, input, inputSize, gradient, inputSize);
+			inputSize, batchSize, deltaBuffer, outputSize, inputBuffer, inputSize, gradient, inputSize);
+
+		CL.clReleaseMemObject(inputBuffer);
 
 		if (calculateDelta) {
 			float[] delta = new float[batchSize * inputSize];
 
 			delta = GPU.sgemm(CLBlastTranspose.CLBlastTransposeNo, CLBlastTranspose.CLBlastTransposeNo, batchSize,
-				inputSize, outputSize, previousDelta, outputSize, weightBuffer, inputSize, delta, inputSize);
+				inputSize, outputSize, deltaBuffer, outputSize, weightBuffer, inputSize, delta, inputSize);
 
+			CL.clReleaseMemObject(deltaBuffer);
 			CL.clReleaseMemObject(weightBuffer);
 
 			return delta;
 		}
 
+		CL.clReleaseMemObject(deltaBuffer);
 		CL.clReleaseMemObject(weightBuffer);
 
 		return null;
