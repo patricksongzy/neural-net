@@ -156,12 +156,13 @@ public class Model {
 
 		int inputSize = keys.get(0).length;
 
+		int batch = 0;
 		for (int i = 1; i <= epochs; i++) {
 			// shuffling data prevents the neural network from learning the order of the data
 			Collections.shuffle(keys);
 
 			// looping through the training set
-			for (int j = 0, batch = 1; j < keys.size(); j += batchSize, batch++) {
+			for (int j = 0; j < keys.size(); j += batchSize, batch++) {
 				// calculating the batch size
 				int s = (j + batchSize) > keys.size() ? (keys.size() % batchSize) : batchSize;
 
