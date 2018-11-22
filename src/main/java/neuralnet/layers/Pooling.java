@@ -128,8 +128,8 @@ public class Pooling implements Layer {
 
 		for (int b = 0; b < batchSize; b++) {
 			for (int f = 0; f < depth; f++) {
-				for (int i = -roundWidth; i < downsampleHeight - roundHeight; i++) {
-					for (int j = -roundHeight; j < downsampleWidth - roundWidth; j++) {
+				for (int i = -roundHeight; i < downsampleHeight - roundHeight; i++) {
+					for (int j = -roundWidth; j < downsampleWidth - roundWidth; j++) {
 						int h = i * downsampleStride;
 						int w = j * downsampleStride;
 
@@ -181,14 +181,18 @@ public class Pooling implements Layer {
 	}
 
 	public float[] backward(float[] previousDelta, boolean calculateDelta) {
-		float[] upsampled = new float[batchSize * depth * padHeight * padWidth];
-
 		if (calculateDelta) {
+			float[] upsampled = new float[batchSize * depth * padHeight * padWidth];
+
+			int roundWidth = (padWidth - downsampleSize) % downsampleStride != 0 ? 1 : 0;
+			int roundHeight = (padHeight - downsampleSize) % downsampleStride != 0 ? 1 : 0;
+
 			for (int b = 0; b < batchSize; b++) {
 				for (int f = 0; f < depth; f++) {
-					for (int i = 0, h = 0; i < downsampleHeight; i++, h += downsampleStride) {
-						for (int j = 0, w = 0; j < downsampleWidth; j++, w += downsampleStride) {
-							int downsampleIndex = j + downsampleWidth * (i + downsampleHeight * (f + depth * b));
+					for (int i = -roundHeight, h = 0; i < downsampleHeight - roundHeight; i++, h += downsampleStride) {
+						for (int j = -roundWidth, w = 0; j < downsampleWidth - roundWidth; j++, w += downsampleStride) {
+							int downsampleIndex =
+								(j + roundWidth) + downsampleWidth * ((i + roundHeight) + downsampleHeight * (f + depth * b));
 
 							if (mode == Mode.MAX) {
 								for (int m = 0; m < downsampleSize; m++) {
@@ -212,9 +216,11 @@ public class Pooling implements Layer {
 					}
 				}
 			}
+
+			return removePad(upsampled, batchSize);
 		}
 
-		return removePad(upsampled, batchSize);
+		return null;
 	}
 
 	private float[] removePad(float[] input, int batchSize) {

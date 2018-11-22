@@ -198,16 +198,20 @@ public class Dense implements Layer {
 		gradient = GPU.sgemm(CLBlastTranspose.CLBlastTransposeYes, CLBlastTranspose.CLBlastTransposeNo, outputSize,
 			inputSize, batchSize, previousDelta, outputSize, input, inputSize, gradient, inputSize);
 
-		float[] delta = new float[batchSize * inputSize];
-
 		if (calculateDelta) {
+			float[] delta = new float[batchSize * inputSize];
+
 			delta = GPU.sgemm(CLBlastTranspose.CLBlastTransposeNo, CLBlastTranspose.CLBlastTransposeNo, batchSize,
 				inputSize, outputSize, previousDelta, outputSize, weightBuffer, inputSize, delta, inputSize);
+
+			CL.clReleaseMemObject(weightBuffer);
+
+			return delta;
 		}
 
 		CL.clReleaseMemObject(weightBuffer);
 
-		return delta;
+		return null;
 	}
 
 	public void update(int scale) {

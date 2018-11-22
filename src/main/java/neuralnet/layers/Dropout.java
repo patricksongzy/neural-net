@@ -15,6 +15,7 @@ public class Dropout implements Layer {
 
 	private int batchSize;
 	private int inputSize;
+	private int[] dimensions;
 	private float dropout;
 	private float[] output;
 
@@ -36,6 +37,8 @@ public class Dropout implements Layer {
 	public void setDimensions(int... dimensions) {
 		System.out.println("Type: " + getType());
 
+		this.dimensions = dimensions;
+
 		inputSize = dimensions[0];
 		for (int i = 1; i < dimensions.length; i++)
 			inputSize *= dimensions[i];
@@ -53,7 +56,7 @@ public class Dropout implements Layer {
 			return cost.derivative(output, target, batchSize);
 		}
 
-		return new float[inputSize];
+		return null;
 	}
 
 	public LayerType getType() {
@@ -65,7 +68,7 @@ public class Dropout implements Layer {
 	}
 
 	public int[] getOutputDimensions() {
-		return new int[]{inputSize};
+		return dimensions;
 	}
 
 	public float[][][] getParameters() {

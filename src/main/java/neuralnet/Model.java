@@ -97,19 +97,6 @@ public class Model {
 	}
 
 	/**
-	 * Backpropagates layers, by calculating gradients.
-	 *
-	 * @param target the target
-	 */
-	@SuppressWarnings("WeakerAccess")
-	public void backward(float[] target) {
-		float[] delta = layers[layers.length - 1].backward(cost, target, layers.length > 1);
-
-		for (int i = layers.length - 2; i >= 0; i--)
-			delta = layers[i].backward(delta, i > 0);
-	}
-
-	/**
 	 * Forward propagates layers.
 	 *
 	 * @param x the input
@@ -123,14 +110,16 @@ public class Model {
 	}
 
 	/**
-	 * Sets the mode on each layer.
+	 * Backpropagates layers, by calculating gradients.
 	 *
-	 * @param mode the mode
+	 * @param target the target
 	 */
 	@SuppressWarnings("WeakerAccess")
-	public void setMode(Layer.Mode mode) {
-		for (Layer layer : layers)
-			layer.setMode(mode);
+	public void backward(float[] target) {
+		float[] delta = layers[layers.length - 1].backward(cost, target, layers.length > 1);
+
+		for (int i = layers.length - 2; i >= 0; i--)
+			delta = layers[i].backward(delta, i > 0);
 	}
 
 	@SuppressWarnings("WeakerAccess")
@@ -151,6 +140,17 @@ public class Model {
 		}
 
 		tasks.clear();
+	}
+
+	/**
+	 * Sets the mode on each layer.
+	 *
+	 * @param mode the mode
+	 */
+	@SuppressWarnings("WeakerAccess")
+	public void setMode(Layer.Mode mode) {
+		for (Layer layer : layers)
+			layer.setMode(mode);
 	}
 
 	public float[][] forward(float[][] x, int batchSize) {

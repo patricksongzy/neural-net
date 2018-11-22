@@ -48,6 +48,7 @@ public class Convolutional implements Layer {
 	private float[] filters, biases;
 	private float[] gradient, biasGradient;
 	private float[] input, output;
+	private float[] inputMatrix;
 
 	private Convolutional(int pad, int stride, int filterAmount, int filterSize, int dilation, Initializer initializer,
 						  UpdaterType updaterType,
@@ -301,7 +302,7 @@ public class Convolutional implements Layer {
 		// TODO: more efficient padding and dilations
 		float[] dilated = dilate(filters, dilation, filterAmount, depth, filterSize, filterSize);
 
-		float[] inputMatrix = new float[patchSize * outputHeight * outputWidth * batchSize];
+		inputMatrix = new float[patchSize * outputHeight * outputWidth * batchSize];
 		int inputIndex = 0;
 		for (int b = 0; b < batchSize; b++) {
 			for (int i = 0, h = 0; i < outputHeight; i++, h += stride) {
@@ -347,6 +348,9 @@ public class Convolutional implements Layer {
 		// derivative
 		output = activation.derivative(output);
 
+		int patchSize = filterSize * filterSize * depth;
+
+		float[] deltaMatrix = new float[filterAmount * outputHeight * outputWidth * batchSize];
 		for (int b = 0; b < batchSize; b++) {
 			for (int f = 0; f < filterAmount; f++) {
 				for (int i = 0, h = 0; i < outputHeight; i++, h += stride) {
@@ -355,85 +359,87 @@ public class Convolutional implements Layer {
 
 						// the bias gradient is the delta, since biases are just added to the output
 						previousDelta[index] *= output[index];
-
-						float delta = previousDelta[index];
-						biasGradient[f] += delta;
-
-						for (int k = 0; k < depth; k++) {
-							for (int m = 0; m < filterSize; m++) {
-								for (int n = 0; n < filterSize; n++) {
-									int gradientIndex = n + filterSize * (m + filterSize * (k + depth * f));
-									int inputIndex = (w + n) + padWidth * ((h + m) + padHeight * (k + depth * b));
-
-									gradient[gradientIndex] += delta * input[inputIndex];
-								}
-							}
-						}
+						biasGradient[f] += previousDelta[index];
+						deltaMatrix[f + filterAmount * (j + outputWidth * (i + outputHeight * b))] = previousDelta[index];
 					}
 				}
 			}
 		}
 
-		float[] delta = new float[batchSize * depth * padHeight * padWidth];
+		float[] result = GPU.sgemm(CLBlastTranspose.CLBlastTransposeYes, CLBlastTranspose.CLBlastTransposeNo,
+			patchSize, filterAmount, outputHeight * outputWidth * batchSize, inputMatrix, patchSize,
+			deltaMatrix, filterAmount, new float[patchSize * filterAmount], filterAmount);
+
+		for (int f = 0; f < filterAmount; f++) {
+			for (int i = 0; i < patchSize; i++) {
+				gradient[i + patchSize * f] = result[f + filterAmount * i];
+			}
+		}
 
 		if (calculateDelta) {
-			previousDelta = dilate(previousDelta, stride, batchSize, filterAmount, outputHeight, outputWidth);
+			return calculateDelta(previousDelta);
+		}
 
-			int dilatedHeight = (outputHeight - 1) * (stride - 1) + outputHeight;
-			int dilatedWidth = (outputWidth - 1) * (stride - 1) + outputWidth;
+		return null;
+	}
 
-			int patchSize = filterSize * filterSize * filterAmount;
+	private float[] calculateDelta(float[] previousDelta) {
+		float[] delta = new float[batchSize * depth * padHeight * padWidth];
 
-			float[] inputMatrix = new float[patchSize * padHeight * padWidth * batchSize];
-			int inputIndex = 0;
-			for (int b = 0; b < batchSize; b++) {
-				for (int i = 0; i < padHeight; i++) {
-					for (int j = 0; j < padWidth; j++) {
-						for (int f = 0; f < filterAmount; f++) {
-							for (int m = 0; m < filterSize; m++) {
-								for (int n = 0; n < filterSize; n++) {
-									// checks for full convolution
-									if ((j - n) < dilatedWidth && (i - m) < dilatedHeight && (j - n) >= 0 && (i - m) >= 0) {
-										int outputIndex = (j - n) + dilatedWidth * ((i - m) + dilatedHeight * (f + filterAmount * b));
-										inputMatrix[inputIndex] = previousDelta[outputIndex];
-									}
+		previousDelta = dilate(previousDelta, stride, batchSize, filterAmount, outputHeight, outputWidth);
 
-									inputIndex++;
+		int dilatedHeight = (outputHeight - 1) * (stride - 1) + outputHeight;
+		int dilatedWidth = (outputWidth - 1) * (stride - 1) + outputWidth;
+
+		int patchSize = filterSize * filterSize * filterAmount;
+
+		float[] deltaMatrix = new float[patchSize * padHeight * padWidth * batchSize];
+		int deltaIndex = 0;
+		for (int b = 0; b < batchSize; b++) {
+			for (int i = 0; i < padHeight; i++) {
+				for (int j = 0; j < padWidth; j++) {
+					for (int f = 0; f < filterAmount; f++) {
+						for (int m = 0; m < filterSize; m++) {
+							for (int n = 0; n < filterSize; n++) {
+								// checks for full convolution
+								if ((j - n) < dilatedWidth && (i - m) < dilatedHeight && (j - n) >= 0 && (i - m) >= 0) {
+									int outputIndex = (j - n) + dilatedWidth * ((i - m) + dilatedHeight * (f + filterAmount * b));
+									deltaMatrix[deltaIndex] = previousDelta[outputIndex];
 								}
+
+								deltaIndex++;
 							}
 						}
 					}
 				}
 			}
-
-			float[] transposed = new float[filters.length];
-			for (int k = 0; k < depth; k++) {
-				for (int f = 0; f < filterAmount; f++) {
-					for (int m = 0; m < filterSize; m++) {
-						for (int n = 0; n < filterSize; n++) {
-							int index = n + filterSize * (m + filterSize * (k + depth * f));
-							transposed[k + depth * (n + filterSize * (m + filterSize * f))] = filters[index];
-						}
-					}
-				}
-			}
-
-			float[] conv = GPU.sgemm(CLBlastTranspose.CLBlastTransposeNo, CLBlastTranspose.CLBlastTransposeNo,
-				padHeight * padWidth * batchSize, depth, patchSize, inputMatrix, patchSize, transposed, depth,
-				new float[batchSize * padHeight * padWidth * depth], depth);
-
-			for (int k = 0; k < depth; k++) {
-				for (int i = 0; i < padHeight * padWidth; i++) {
-					for (int b = 0; b < batchSize; b++) {
-						delta[i + padHeight * padWidth * (k + depth * b)] = conv[k + depth * (i + padHeight * padWidth * b)];
-					}
-				}
-			}
-
-			return removePad(delta, batchSize);
 		}
 
-		return delta;
+		float[] transposed = new float[filters.length];
+		for (int k = 0; k < depth; k++) {
+			for (int f = 0; f < filterAmount; f++) {
+				for (int m = 0; m < filterSize; m++) {
+					for (int n = 0; n < filterSize; n++) {
+						int index = n + filterSize * (m + filterSize * (k + depth * f));
+						transposed[k + depth * (n + filterSize * (m + filterSize * f))] = filters[index];
+					}
+				}
+			}
+		}
+
+		float[] conv = GPU.sgemm(CLBlastTranspose.CLBlastTransposeNo, CLBlastTranspose.CLBlastTransposeNo,
+			padHeight * padWidth * batchSize, depth, patchSize, deltaMatrix, patchSize, transposed, depth,
+			new float[batchSize * padHeight * padWidth * depth], depth);
+
+		for (int k = 0; k < depth; k++) {
+			for (int i = 0; i < padHeight * padWidth; i++) {
+				for (int b = 0; b < batchSize; b++) {
+					delta[i + padHeight * padWidth * (k + depth * b)] = conv[k + depth * (i + padHeight * padWidth * b)];
+				}
+			}
+		}
+
+		return removePad(delta, batchSize);
 	}
 
 	private float[] removePad(float[] input, int batchSize) {

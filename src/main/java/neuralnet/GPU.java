@@ -77,6 +77,7 @@ public class GPU {
 		if (platformIndex > platforms.length)
 			throw new IllegalArgumentException("Invalid platform.");
 		cl_platform_id platform = platforms[platformIndex];
+		getPlatformName(platform);
 
 		// Initialize the context properties
 		cl_context_properties contextProperties = new cl_context_properties();
@@ -93,6 +94,7 @@ public class GPU {
 		if (deviceIndex > devices.length)
 			throw new IllegalArgumentException("Invalid device.");
 		cl_device_id device = devices[deviceIndex];
+		getDeviceName(device);
 
 		// Create a context for the selected device
 		context = clCreateContext(contextProperties, 1,
@@ -105,6 +107,26 @@ public class GPU {
 			clReleaseCommandQueue(commandQueue);
 			clReleaseContext(context);
 		}));
+	}
+
+	private static void getPlatformName(cl_platform_id platform) {
+		long size[] = new long[1];
+		clGetPlatformInfo(platform, CL.CL_PLATFORM_NAME, 0, null, size);
+		byte buffer[] = new byte[(int) size[0]];
+		clGetPlatformInfo(platform, CL.CL_PLATFORM_NAME, buffer.length, Pointer.to(buffer), null);
+
+		// Create a string from the buffer (excluding the trailing \0 byte)
+		System.out.println("platform: " + new String(buffer, 0, buffer.length - 1));
+	}
+
+	private static void getDeviceName(cl_device_id device) {
+		long size[] = new long[1];
+		clGetDeviceInfo(device, CL.CL_DEVICE_NAME, 0, null, size);
+		byte buffer[] = new byte[(int) size[0]];
+		clGetDeviceInfo(device, CL.CL_DEVICE_NAME, buffer.length, Pointer.to(buffer), null);
+
+		// Create a string from the buffer (excluding the trailing \0 byte)
+		System.out.println("device: " + new String(buffer, 0, buffer.length - 1));
 	}
 
 	public static float[] sgemm(int aTranspose, int bTranspose, int m, int n, int k, float[] a, int lda, float[] b, int ldb,
