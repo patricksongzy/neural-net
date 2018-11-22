@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<?import javafx.scene.chart.LineChart?>
+<?import javafx.scene.chart.NumberAxis?>
+<?import javafx.scene.layout.*?>
+<AnchorPane xmlns:fx="http://javafx.com/fxml/1" prefHeight="400.0" prefWidth="600.0"
+            xmlns="http://javafx.com/javafx/8.0.171" fx:controller="plot.Controller">
+    <LineChart fx:id="plot" layoutX="50.0" prefHeight="400.0" prefWidth="600.0" AnchorPane.bottomAnchor="0.0"
+               AnchorPane.leftAnchor="0.0" AnchorPane.rightAnchor="0.0" AnchorPane.topAnchor="0.0">
+        <xAxis>
+            <NumberAxis side="BOTTOM" label="Step"/>
+        </xAxis>
+        <yAxis>
+            <NumberAxis side="LEFT" label="Loss"/>
+        </yAxis>
+    </LineChart>
+</AnchorPane>

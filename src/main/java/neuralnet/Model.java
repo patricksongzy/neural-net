@@ -1,9 +1,11 @@
 package neuralnet;
 
+import javafx.application.Application;
 import neuralnet.costs.Cost;
 import neuralnet.costs.CostType;
 import neuralnet.layers.Layer;
 import neuralnet.layers.LayerType;
+import plot.Plot;
 
 import java.io.*;
 import java.util.ArrayList;
@@ -145,6 +147,8 @@ public class Model {
 	}
 
 	public void train(Map<float[], Float> data, int batchSize, int epochs) {
+		new Thread(() -> Application.launch(Plot.class, (String) null)).start();
+
 		// setting mode to training mode
 		setMode(Layer.Mode.TRAIN);
 
@@ -187,7 +191,10 @@ public class Model {
 				for (int k = progress; k < 30; k++)
 					System.out.print("-");
 
-				System.out.print("] - loss: " + cost.cost(output, targets) / s);
+				float average = cost.cost(output, targets) / s;
+				System.out.print("] - loss: " + average);
+
+				Plot.update(batch, average);
 			}
 		}
 	}
