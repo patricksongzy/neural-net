@@ -2,6 +2,8 @@ package neuralnet.layers;
 
 import neuralnet.Model;
 import neuralnet.costs.CostType;
+import neuralnet.initializers.HeInitialization;
+import neuralnet.optimizers.UpdaterType;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -11,8 +13,8 @@ class GRUTest {
 	void gradientTest() {
 		// just a regular test
 		Model model = new Model.Builder()
-			.add(new GRU.Builder().hiddenSize(5).build())
-			.add(new GRU.Builder().hiddenSize(5).build())
+			.add(new GRU.Builder().hiddenSize(5).initializer(new HeInitialization()).updaterType(UpdaterType.ADAM).build())
+			.add(new GRU.Builder().hiddenSize(5).initializer(new HeInitialization()).updaterType(UpdaterType.ADAM).build())
 			.inputDimensions(2).cost(CostType.MEAN_SQUARE_ERROR).build();
 		model.export("src/test/resources/gru-import-test.model");
 		model = new Model("src/test/resources/gru-import-test.model");

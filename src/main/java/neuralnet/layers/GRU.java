@@ -4,7 +4,6 @@ import neuralnet.GPU;
 import neuralnet.activations.Activation;
 import neuralnet.activations.ActivationType;
 import neuralnet.costs.Cost;
-import neuralnet.initializers.HeInitialization;
 import neuralnet.initializers.Initializer;
 import neuralnet.optimizers.Updater;
 import neuralnet.optimizers.UpdaterType;
@@ -453,10 +452,8 @@ public class GRU implements Layer {
 		private UpdaterType updaterType;
 
 		public Builder() {
-			initializer = new HeInitialization();
 			hiddenActivation = ActivationType.SIGMOID;
 			activation = ActivationType.TANH;
-			updaterType = UpdaterType.ADAM;
 		}
 
 		public Builder hiddenSize(int hiddenSize) {

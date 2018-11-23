@@ -3,6 +3,8 @@ package neuralnet.layers;
 import neuralnet.Model;
 import neuralnet.activations.ActivationType;
 import neuralnet.costs.CostType;
+import neuralnet.initializers.HeInitialization;
+import neuralnet.optimizers.UpdaterType;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
@@ -11,7 +13,8 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 class DenseTest {
 	@Test
 	void forwardTest() {
-		Dense dense = new Dense.Builder().outputSize(5).build();
+		Dense dense = new Dense.Builder().outputSize(5).initializer(new HeInitialization()).activation(ActivationType.RELU)
+			.updaterType(UpdaterType.ADAM).build();
 		dense.setDimensions(2);
 		float[] updated = new float[]
 			{1, 2, 1, 0, 1, 1, 0, 0, 1, 2};
@@ -28,8 +31,10 @@ class DenseTest {
 	void gradientTest() {
 		// just a regular test
 		Model model = new Model.Builder()
-			.add(new Dense.Builder().outputSize(5).activation(ActivationType.SIGMOID).build())
-			.add(new Dense.Builder().outputSize(5).activation(ActivationType.SIGMOID).build())
+			.add(new Dense.Builder().outputSize(5).activation(ActivationType.SIGMOID).initializer(new HeInitialization())
+				.updaterType(UpdaterType.AMSGRAD).build())
+			.add(new Dense.Builder().outputSize(5).activation(ActivationType.SIGMOID).initializer(new HeInitialization())
+				.updaterType(UpdaterType.AMSGRAD).build())
 			.inputDimensions(2)
 			.cost(CostType.CROSS_ENTROPY).build();
 		model.export("src/test/resources/ff-import-test.model");

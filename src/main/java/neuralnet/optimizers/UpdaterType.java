@@ -7,9 +7,8 @@ import java.io.IOException;
 /**
  * The UpdaterType is used for exporting and importing neural networks, and for repeatedly creating instances of an updater.
  */
-@SuppressWarnings("SameReturnValue")
 public enum UpdaterType {
-	ADAM;
+	ADAM, AMSGRAD;
 
 	/**
 	 * Creates an UpdaterType, given an input stream.
@@ -19,9 +18,13 @@ public enum UpdaterType {
 	 */
 	public static UpdaterType fromString(DataInputStream dis) throws IOException {
 		switch (valueOf(dis.readUTF())) {
-			default:
+			case ADAM:
 				Adam.importParameters(dis);
 				return ADAM;
+			case AMSGRAD:
+			default:
+				AMSGrad.importParameters(dis);
+				return AMSGRAD;
 		}
 	}
 
@@ -32,8 +35,11 @@ public enum UpdaterType {
 	 */
 	public Updater create(int size) {
 		switch (this) {
-			default:
+			case ADAM:
 				return new Adam(size);
+			case AMSGRAD:
+			default:
+				return new AMSGrad(size);
 		}
 	}
 
@@ -45,8 +51,11 @@ public enum UpdaterType {
 	 */
 	public Updater create(DataInputStream dis) throws IOException {
 		switch (this) {
-			default:
+			case ADAM:
 				return new Adam(dis);
+			case AMSGRAD:
+			default:
+				return new AMSGrad(dis);
 		}
 	}
 
@@ -59,8 +68,12 @@ public enum UpdaterType {
 		dos.writeUTF(toString());
 
 		switch (this) {
-			default:
+			case ADAM:
 				Adam.exportParameters(dos);
+				break;
+			case AMSGRAD:
+			default:
+				AMSGrad.exportParameters(dos);
 		}
 	}
 }
