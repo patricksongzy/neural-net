@@ -33,7 +33,6 @@ public class MNIST {
 					.initializer(new HeInitialization())
 					.pad(2)
 					.stride(1)
-					.updaterType(UpdaterType.ADAM)
 					.build()
 			)
 			.add(
@@ -47,7 +46,6 @@ public class MNIST {
 					.initializer(new HeInitialization())
 					.pad(2)
 					.stride(1)
-					.updaterType(UpdaterType.ADAM)
 					.build()
 			)
 			.add(
@@ -58,7 +56,6 @@ public class MNIST {
 					.outputSize(1024)
 					.activation(ActivationType.RELU)
 					.initializer(new HeInitialization())
-					.updaterType(UpdaterType.ADAM)
 					.build()
 			)
 			.add(
@@ -69,10 +66,10 @@ public class MNIST {
 					.outputSize(10)
 					.activation(OutputActivationType.SOFTMAX)
 					.initializer(new HeInitialization())
-					.updaterType(UpdaterType.ADAM)
 					.build()
 			)
 			.cost(CostType.SPARSE_CROSS_ENTROPY)
+			.updaterType(UpdaterType.AMSGRAD)
 			.inputDimensions(28, 28, 1)
 			.build();
 
@@ -98,6 +95,6 @@ public class MNIST {
 		}
 
 		// train model
-		model.train(trainData, batchSize, epochs);
+		model.train(trainData, batchSize, epochs, 0.001f, 0.005f, epochs / 10, 2);
 	}
 }

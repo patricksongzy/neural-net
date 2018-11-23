@@ -4,6 +4,7 @@ import neuralnet.activations.Activation;
 import neuralnet.activations.ActivationType;
 import neuralnet.costs.Cost;
 import neuralnet.initializers.Initializer;
+import neuralnet.optimizers.UpdaterType;
 
 import java.io.DataInputStream;
 import java.io.DataOutputStream;
@@ -11,7 +12,7 @@ import java.io.IOException;
 
 @SuppressWarnings("FieldCanBeLocal")
 public class BatchNormalization implements Layer {
-	private Mode mode = Mode.TRAIN;
+	private Mode mode;
 
 	private int batchSize;
 	private int height, width, depth;
@@ -72,7 +73,7 @@ public class BatchNormalization implements Layer {
 		}
 	}
 
-	public void setDimensions(int... dimensions) {
+	public void setDimensions(int[] dimensions, UpdaterType updaterType) {
 		if (dimensions.length == 3) {
 			this.height = dimensions[0];
 			this.width = dimensions[1];

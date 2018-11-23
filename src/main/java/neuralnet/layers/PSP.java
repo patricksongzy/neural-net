@@ -17,7 +17,6 @@ public class PSP implements Layer {
 
 	private LinkedList<Integer> downsampleSizes;
 	private Initializer initializer;
-	private UpdaterType updaterType;
 
 	private float[] output;
 
@@ -26,13 +25,12 @@ public class PSP implements Layer {
 	private Layer[] branch3;
 	private Layer[] branch4;
 
-	private PSP(LinkedList<Integer> downsampleSizes, Initializer initializer, UpdaterType updaterType) {
+	private PSP(LinkedList<Integer> downsampleSizes, Initializer initializer) {
 		this.downsampleSizes = downsampleSizes;
 		this.initializer = initializer;
-		this.updaterType = updaterType;
 	}
 
-	PSP(DataInputStream dis) throws IOException {
+	PSP(DataInputStream dis, UpdaterType updaterType) throws IOException {
 		height = dis.readInt();
 		width = dis.readInt();
 		depth = dis.readInt();
@@ -42,10 +40,10 @@ public class PSP implements Layer {
 		branch3 = new Layer[4];
 		branch4 = new Layer[4];
 		for (int i = 0; i < 4; i++) {
-			branch1[i] = LayerType.fromString(dis);
-			branch2[i] = LayerType.fromString(dis);
-			branch3[i] = LayerType.fromString(dis);
-			branch4[i] = LayerType.fromString(dis);
+			branch1[i] = LayerType.fromString(dis, updaterType);
+			branch2[i] = LayerType.fromString(dis, updaterType);
+			branch3[i] = LayerType.fromString(dis, updaterType);
+			branch4[i] = LayerType.fromString(dis, updaterType);
 		}
 	}
 
@@ -66,7 +64,7 @@ public class PSP implements Layer {
 		}
 	}
 
-	public void setDimensions(int... dimensions) {
+	public void setDimensions(int[] dimensions, UpdaterType updaterType) {
 		if (dimensions.length != 3)
 			throw new IllegalArgumentException("Invalid input dimensions.");
 
@@ -76,46 +74,46 @@ public class PSP implements Layer {
 
 		branch1 = new Layer[]{
 			new Pooling.Builder().downsampleSize(downsampleSizes.getFirst()).downsampleStride(downsampleSizes.remove()).mode(Pooling.Mode.AVERAGE).build(),
-			new Convolutional.Builder().filterAmount(512).filterSize(1).stride(1).updaterType(updaterType)
-				.activationType(ActivationType.IDENTITY).initializer(initializer).pad(0).build(),
+			new Convolutional.Builder().filterAmount(512).filterSize(1).stride(1).activationType(ActivationType.IDENTITY)
+				.initializer(initializer).pad(0).build(),
 			new BatchNormalization.Builder().initializer(initializer).activationType(ActivationType.RELU).build(),
 			new Interpolation.Builder().outputHeight(height).outputWidth(width).build()
 		};
 
 		branch2 = new Layer[]{
 			new Pooling.Builder().downsampleSize(downsampleSizes.getFirst()).downsampleStride(downsampleSizes.remove()).mode(Pooling.Mode.AVERAGE).build(),
-			new Convolutional.Builder().filterAmount(512).filterSize(1).stride(1).updaterType(updaterType)
-				.activationType(ActivationType.IDENTITY).initializer(initializer).pad(0).build(),
+			new Convolutional.Builder().filterAmount(512).filterSize(1).stride(1).activationType(ActivationType.IDENTITY)
+				.initializer(initializer).pad(0).build(),
 			new BatchNormalization.Builder().initializer(initializer).activationType(ActivationType.RELU).build(),
 			new Interpolation.Builder().outputHeight(height).outputWidth(width).build()
 		};
 
 		branch3 = new Layer[]{
 			new Pooling.Builder().downsampleSize(downsampleSizes.getFirst()).downsampleStride(downsampleSizes.remove()).mode(Pooling.Mode.AVERAGE).build(),
-			new Convolutional.Builder().filterAmount(512).filterSize(1).stride(1).updaterType(updaterType)
-				.activationType(ActivationType.IDENTITY).initializer(initializer).pad(0).build(),
+			new Convolutional.Builder().filterAmount(512).filterSize(1).stride(1).activationType(ActivationType.IDENTITY)
+				.initializer(initializer).pad(0).build(),
 			new BatchNormalization.Builder().initializer(initializer).activationType(ActivationType.RELU).build(),
 			new Interpolation.Builder().outputHeight(height).outputWidth(width).build()
 		};
 
 		branch4 = new Layer[]{
 			new Pooling.Builder().downsampleSize(downsampleSizes.getFirst()).downsampleStride(downsampleSizes.remove()).mode(Pooling.Mode.AVERAGE).build(),
-			new Convolutional.Builder().filterAmount(512).filterSize(1).stride(1).updaterType(updaterType)
-				.activationType(ActivationType.IDENTITY).initializer(initializer).pad(0).build(),
+			new Convolutional.Builder().filterAmount(512).filterSize(1).stride(1).activationType(ActivationType.IDENTITY)
+				.initializer(initializer).pad(0).build(),
 			new BatchNormalization.Builder().initializer(initializer).activationType(ActivationType.RELU).build(),
 			new Interpolation.Builder().outputHeight(height).outputWidth(width).build()
 		};
 
-		branch1[0].setDimensions(dimensions);
-		branch2[0].setDimensions(dimensions);
-		branch3[0].setDimensions(dimensions);
-		branch4[0].setDimensions(dimensions);
+		branch1[0].setDimensions(dimensions, updaterType);
+		branch2[0].setDimensions(dimensions, updaterType);
+		branch3[0].setDimensions(dimensions, updaterType);
+		branch4[0].setDimensions(dimensions, updaterType);
 
 		for (int i = 1; i < 4; i++) {
-			branch1[i].setDimensions(branch1[i - 1].getOutputDimensions());
-			branch2[i].setDimensions(branch2[i - 1].getOutputDimensions());
-			branch3[i].setDimensions(branch3[i - 1].getOutputDimensions());
-			branch4[i].setDimensions(branch4[i - 1].getOutputDimensions());
+			branch1[i].setDimensions(branch1[i - 1].getOutputDimensions(), updaterType);
+			branch2[i].setDimensions(branch2[i - 1].getOutputDimensions(), updaterType);
+			branch3[i].setDimensions(branch3[i - 1].getOutputDimensions(), updaterType);
+			branch4[i].setDimensions(branch4[i - 1].getOutputDimensions(), updaterType);
 		}
 	}
 
@@ -237,7 +235,6 @@ public class PSP implements Layer {
 	public static class Builder {
 		private LinkedList<Integer> downsampleSizes = new LinkedList<>();
 		private Initializer initializer;
-		private UpdaterType updaterType;
 
 		public Builder downsampleSizes(int... downsampleSizes) {
 			for (int value : downsampleSizes)
@@ -250,13 +247,8 @@ public class PSP implements Layer {
 			return this;
 		}
 
-		public Builder updaterType(UpdaterType updaterType) {
-			this.updaterType = updaterType;
-			return this;
-		}
-
 		public PSP build() {
-			return new PSP(downsampleSizes, initializer, updaterType);
+			return new PSP(downsampleSizes, initializer);
 		}
 	}
 }

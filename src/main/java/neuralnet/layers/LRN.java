@@ -1,6 +1,7 @@
 package neuralnet.layers;
 
 import neuralnet.costs.Cost;
+import neuralnet.optimizers.UpdaterType;
 
 import java.io.DataInputStream;
 import java.io.DataOutputStream;
@@ -31,7 +32,7 @@ public class LRN implements Layer {
 		beta = dis.readFloat();
 	}
 
-	public void setDimensions(int... dimensions) {
+	public void setDimensions(int[] dimensions, UpdaterType updaterType) {
 		if (dimensions.length < 3)
 			throw new IllegalArgumentException();
 

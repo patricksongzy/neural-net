@@ -7,8 +7,39 @@ import java.io.IOException;
 /**
  * The UpdaterType is used for exporting and importing neural networks, and for repeatedly creating instances of an updater.
  */
+@SuppressWarnings("Duplicates")
 public enum UpdaterType {
 	ADAM, AMSGRAD;
+
+	public void init(float learningRate) {
+		switch (this) {
+			case ADAM:
+				Adam.setLearningRate(learningRate);
+			case AMSGRAD:
+			default:
+				AMSGrad.setLearningRate(learningRate);
+		}
+	}
+
+	public void setDecay(float decay) {
+		switch (this) {
+			case ADAM:
+				break;
+			case AMSGRAD:
+			default:
+				AMSGrad.setDecay(decay);
+		}
+	}
+
+	public void init(float... parameters) {
+		switch (this) {
+			case ADAM:
+				Adam.init(parameters);
+			case AMSGRAD:
+			default:
+				AMSGrad.init(parameters);
+		}
+	}
 
 	/**
 	 * Creates an UpdaterType, given an input stream.

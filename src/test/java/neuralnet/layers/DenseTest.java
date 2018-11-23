@@ -13,9 +13,8 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 class DenseTest {
 	@Test
 	void forwardTest() {
-		Dense dense = new Dense.Builder().outputSize(5).initializer(new HeInitialization()).activation(ActivationType.RELU)
-			.updaterType(UpdaterType.ADAM).build();
-		dense.setDimensions(2);
+		Dense dense = new Dense.Builder().outputSize(5).initializer(new HeInitialization()).activation(ActivationType.RELU).build();
+		dense.setDimensions(new int[]{2}, UpdaterType.AMSGRAD);
 		float[] updated = new float[]
 			{1, 2, 1, 0, 1, 1, 0, 0, 1, 2};
 		float[] biases = new float[]{1, 0, 2, 1, 1};
@@ -31,12 +30,9 @@ class DenseTest {
 	void gradientTest() {
 		// just a regular test
 		Model model = new Model.Builder()
-			.add(new Dense.Builder().outputSize(5).activation(ActivationType.SIGMOID).initializer(new HeInitialization())
-				.updaterType(UpdaterType.AMSGRAD).build())
-			.add(new Dense.Builder().outputSize(5).activation(ActivationType.SIGMOID).initializer(new HeInitialization())
-				.updaterType(UpdaterType.AMSGRAD).build())
-			.inputDimensions(2)
-			.cost(CostType.CROSS_ENTROPY).build();
+			.add(new Dense.Builder().outputSize(5).activation(ActivationType.SIGMOID).initializer(new HeInitialization()).build())
+			.add(new Dense.Builder().outputSize(5).activation(ActivationType.SIGMOID).initializer(new HeInitialization()).build())
+			.inputDimensions(2).cost(CostType.CROSS_ENTROPY).updaterType(UpdaterType.AMSGRAD).build();
 		model.export("src/test/resources/ff-import-test.model");
 		model = new Model("src/test/resources/ff-import-test.model");
 

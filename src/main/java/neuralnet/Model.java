@@ -5,6 +5,7 @@ import neuralnet.costs.Cost;
 import neuralnet.costs.CostType;
 import neuralnet.layers.Layer;
 import neuralnet.layers.LayerType;
+import neuralnet.optimizers.UpdaterType;
 import plot.Plot;
 
 import java.io.*;
@@ -38,24 +39,31 @@ public class Model {
 	}
 
 	private int inputSize;
+	private UpdaterType updaterType;
 
 	// TODO: Implement non-sequential
 	private Layer[] layers;
 	private Cost cost;
 
-	private Model(Layer[] layers, CostType costType, int[] inputDimensions) {
+	private Model(Layer[] layers, CostType costType, UpdaterType updaterType, int[] inputDimensions) {
+		if (layers.length <= 0)
+			throw new IllegalArgumentException("Invalid layer amount.");
+		if (costType == null || updaterType == null || inputDimensions == null)
+			throw new IllegalArgumentException("Values cannot be null.");
+
 		this.layers = layers;
 		this.cost = costType;
+		this.updaterType = updaterType;
 
 		inputSize = inputDimensions[0];
 		for (int i = 1; i < inputDimensions.length; i++)
 			inputSize *= inputDimensions[i];
 
-		layers[0].setDimensions(inputDimensions); // setting input dimensions
+		layers[0].setDimensions(inputDimensions, updaterType); // setting input dimensions
 
 		// each layer's output is the next layer's input
 		for (int i = 1; i < layers.length; i++) {
-			layers[i].setDimensions(layers[i - 1].getOutputDimensions());
+			layers[i].setDimensions(layers[i - 1].getOutputDimensions(), updaterType);
 		}
 	}
 
@@ -72,10 +80,12 @@ public class Model {
 			int layerAmount = dis.readInt();
 			inputSize = dis.readInt();
 
+			updaterType = UpdaterType.fromString(dis);
+
 			layers = new Layer[layerAmount];
 			for (int i = 0; i < layerAmount; i++) {
 				System.out.println("Importing layer " + (i + 1) + " / " + layerAmount);
-				layers[i] = LayerType.fromString(dis);
+				layers[i] = LayerType.fromString(dis, updaterType);
 				System.out.println("Done importing layer " + (i + 1) + " / " + layerAmount);
 			}
 
@@ -146,18 +156,30 @@ public class Model {
 		tasks.clear();
 	}
 
-	public void train(Map<float[], Float> data, int batchSize, int epochs) {
+	public void train(Map<float[], Float> data, int batchSize, int epochs, float learningRate, float decay, int restartInterval,
+					  int restartMultiplier) {
 		new Thread(() -> Application.launch(Plot.class, (String) null)).start();
 
 		// setting mode to training mode
 		setMode(Layer.Mode.TRAIN);
 
 		List<float[]> keys = new ArrayList<>(data.keySet());
+		updaterType.setDecay(decay * (float) Math.sqrt((float) batchSize / (keys.size() * restartInterval)));
 
 		int inputSize = keys.get(0).length;
 
 		int batch = 0;
-		for (int i = 1; i <= epochs; i++) {
+		updaterType.init(learningRate);
+		for (int i = 1, current = 1; i <= epochs; i++, current++) {
+			if (current == restartInterval) {
+				updaterType.init(learningRate);
+				restartInterval *= restartMultiplier;
+				current = 0;
+				updaterType.setDecay(decay * (float) Math.sqrt((float) batchSize / (keys.size() * restartInterval)));
+			} else {
+				updaterType.init(0.5f + 0.5f * (float) Math.cos((float) current / restartInterval * Math.PI));
+			}
+
 			// shuffling data prevents the neural network from learning the order of the data
 			Collections.shuffle(keys);
 
@@ -459,6 +481,8 @@ public class Model {
 			dos.writeInt(layers.length);
 			dos.writeInt(inputSize);
 
+			updaterType.export(dos);
+
 			// exporting layers
 			for (Layer layer : layers) {
 				layer.getType().export(dos);
@@ -478,6 +502,7 @@ public class Model {
 	public static class Builder {
 		private final ArrayList<Layer> LAYERS = new ArrayList<>();
 		private CostType cost;
+		private UpdaterType updaterType;
 		private int[] inputDimensions;
 
 		/**
@@ -502,6 +527,11 @@ public class Model {
 			return this;
 		}
 
+		public Builder updaterType(UpdaterType updaterType) {
+			this.updaterType = updaterType;
+			return this;
+		}
+
 		/**
 		 * Sets the input dimensions.
 		 *
@@ -513,11 +543,7 @@ public class Model {
 		}
 
 		public Model build() {
-			if (LAYERS.size() > 0 && cost != null && inputDimensions != null) {
-				return new Model(LAYERS.toArray(new Layer[0]), cost, inputDimensions);
-			}
-
-			throw new IllegalArgumentException();
+			return new Model(LAYERS.toArray(new Layer[0]), cost, updaterType, inputDimensions);
 		}
 	}
 }

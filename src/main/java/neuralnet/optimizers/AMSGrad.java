@@ -17,6 +17,7 @@ public class AMSGrad implements Updater {
 	private static float beta1 = 0.9f;
 	private static float beta2 = 0.999f;
 	private static float epsilon = 1e-8f;
+	private static float decay = 0.001f;
 	private static float learningRate = 0.0001f;
 
 	private int size;
@@ -42,19 +43,31 @@ public class AMSGrad implements Updater {
 	}
 
 	/**
+	 * Initializes parameters. Parameters are ordered as follows: <code>beta1, beta2, epsilon</code>
+	 *
+	 * @param parameters the parameters
+	 */
+	@SuppressWarnings("WeakerAccess")
+	public static void init(float[] parameters) {
+		if (parameters.length != 3)
+			throw new IllegalArgumentException("Invalid parameters.");
+
+		AMSGrad.beta1 = parameters[0];
+		AMSGrad.beta2 = parameters[1];
+		AMSGrad.epsilon = parameters[2];
+	}
+
+	/**
 	 * The learning rate reduces updates overshooting.
 	 *
 	 * @param learningRate the learning rate
 	 */
-	public static void init(float learningRate) {
+	static void setLearningRate(float learningRate) {
 		AMSGrad.learningRate = learningRate;
 	}
 
-	public static void init(float beta1, float beta2, float epsilon, float learningRate) {
-		AMSGrad.beta1 = beta1;
-		AMSGrad.beta2 = beta2;
-		AMSGrad.epsilon = epsilon;
-		AMSGrad.learningRate = learningRate;
+	static void setDecay(float decay) {
+		AMSGrad.decay = decay;
 	}
 
 	/**
@@ -89,7 +102,7 @@ public class AMSGrad implements Updater {
 
 		IntStream.range(0, size).parallel().forEach(i -> {
 			v[i] = Math.max(v[i], v[i] * beta2 + b2 * gradient[i] * gradient[i]);
-			parameters[i] -= (float) ((learningRate * m[i]) / (Math.sqrt(v[i]) + epsilon)) / scale;
+			parameters[i] -= learningRate * (m[i] / (scale * (Math.sqrt(v[i]) + epsilon)) + decay * parameters[i]);
 		});
 	}
 

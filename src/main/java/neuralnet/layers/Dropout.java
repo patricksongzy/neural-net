@@ -1,6 +1,7 @@
 package neuralnet.layers;
 
 import neuralnet.costs.Cost;
+import neuralnet.optimizers.UpdaterType;
 
 import java.io.DataInputStream;
 import java.io.DataOutputStream;
@@ -34,7 +35,7 @@ public class Dropout implements Layer {
 		System.out.println("Dropout: " + dropout);
 	}
 
-	public void setDimensions(int... dimensions) {
+	public void setDimensions(int[] dimensions, UpdaterType updaterType) {
 		System.out.println("Type: " + getType());
 
 		this.dimensions = dimensions;

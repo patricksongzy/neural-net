@@ -20,13 +20,12 @@ import java.io.IOException;
  * then run through an activation function.
  */
 public class Dense implements Layer {
-	private Mode mode = Mode.TRAIN;
+	private Mode mode;
 
 	private int batchSize;
 	private int inputSize, outputSize;
 	private float temperature;
 	private Initializer initializer;
-	private UpdaterType updaterType;
 	private Activation activation;
 	private Updater weightUpdater;
 	private Updater biasUpdater;
@@ -40,7 +39,7 @@ public class Dense implements Layer {
 	 *
 	 * @param dis the input stream
 	 */
-	Dense(DataInputStream dis) throws IOException {
+	Dense(DataInputStream dis, UpdaterType updaterType) throws IOException {
 		System.out.println("Type: " + getType());
 
 		inputSize = dis.readInt();
@@ -53,8 +52,6 @@ public class Dense implements Layer {
 
 		activation = Activation.fromString(dis);
 		System.out.println("Activation: " + activation.getType());
-		updaterType = UpdaterType.fromString(dis);
-		System.out.println("Updater: " + updaterType);
 
 		System.out.println("Importing weights.");
 		weights = new float[outputSize * inputSize];
@@ -79,9 +76,8 @@ public class Dense implements Layer {
 		System.out.println("Done importing weights.");
 	}
 
-	private Dense(int outputSize, float temperature, Initializer initializer,
-				  UpdaterType updaterType, Activation activation) {
-		if (initializer == null || updaterType == null || activation == null)
+	private Dense(int outputSize, float temperature, Initializer initializer, Activation activation) {
+		if (initializer == null || activation == null)
 			throw new IllegalArgumentException("Values cannot be null.");
 
 		if (activation.getType() != Activation.Type.SOFTMAX && temperature != 1) {
@@ -95,7 +91,6 @@ public class Dense implements Layer {
 		this.outputSize = outputSize;
 		this.temperature = temperature;
 		this.initializer = initializer;
-		this.updaterType = updaterType;
 		this.activation = activation;
 	}
 
@@ -103,7 +98,7 @@ public class Dense implements Layer {
 		this.mode = mode;
 	}
 
-	public void setDimensions(int... dimensions) {
+	public void setDimensions(int[] dimensions, UpdaterType updaterType) {
 		System.out.println("Type: " + getType());
 
 		inputSize = dimensions[0];
@@ -153,13 +148,19 @@ public class Dense implements Layer {
 
 		inputBuffer = GPU.gpuAlloc(CL.CL_MEM_READ_ONLY, input.length, input);
 		weightBuffer = GPU.gpuAlloc(CL.CL_MEM_READ_ONLY, weights.length, weights);
+
 		output = GPU.sgemm(CLBlastTranspose.CLBlastTransposeNo, CLBlastTranspose.CLBlastTransposeYes, batchSize,
 			outputSize, inputSize, inputBuffer, inputSize, weightBuffer, inputSize, output, outputSize);
 
-		if (mode == Mode.EVAL && temperature != 1) {
-			for (int i = 0; i < batchSize; i++) {
-				output[i] /= temperature;
+		if (mode == Mode.EVAL) {
+			if (temperature != 1) {
+				for (int i = 0; i < batchSize; i++) {
+					output[i] /= temperature;
+				}
 			}
+
+			CL.clReleaseMemObject(inputBuffer);
+			CL.clReleaseMemObject(weightBuffer);
 		}
 
 		// activating output
@@ -225,7 +226,6 @@ public class Dense implements Layer {
 		dos.writeFloat(temperature);
 
 		activation.export(dos);
-		updaterType.export(dos);
 
 		weightUpdater.export(dos);
 		biasUpdater.export(dos);
@@ -256,7 +256,6 @@ public class Dense implements Layer {
 	public static class Builder {
 		private int outputSize;
 		private float temperature;
-		private UpdaterType updaterType;
 		private Activation activation;
 		private Initializer initializer;
 
@@ -288,17 +287,6 @@ public class Dense implements Layer {
 		}
 
 		/**
-		 * The updater updates parameters.
-		 *
-		 * @param updaterType the updater
-		 */
-		public Builder updaterType(UpdaterType updaterType) {
-			this.updaterType = updaterType;
-
-			return this;
-		}
-
-		/**
 		 * The activation simulates neurons firing.
 		 *
 		 * @param activation the activation type
@@ -321,7 +309,7 @@ public class Dense implements Layer {
 		}
 
 		public Dense build() {
-			return new Dense(outputSize, temperature, initializer, updaterType, activation);
+			return new Dense(outputSize, temperature, initializer, activation);
 		}
 	}
 }

@@ -1,6 +1,7 @@
 package neuralnet.layers;
 
 import neuralnet.costs.Cost;
+import neuralnet.optimizers.UpdaterType;
 
 import java.io.DataInputStream;
 import java.io.DataOutputStream;
@@ -45,7 +46,7 @@ public class Interpolation implements Layer {
 		dos.writeInt(outputWidth);
 	}
 
-	public void setDimensions(int... dimensions) {
+	public void setDimensions(int dimensions[], UpdaterType updaterType) {
 		this.height = dimensions[0];
 		this.width = dimensions[1];
 		this.depth = dimensions[2];

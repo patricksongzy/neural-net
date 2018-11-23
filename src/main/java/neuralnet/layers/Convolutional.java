@@ -23,6 +23,7 @@ import java.util.logging.Logger;
  * (the next layer that will be updated), so that upsampling layers are compatible
  */
 public class Convolutional implements Layer {
+	private Mode mode;
 	private int batchSize;
 
 	// the filter amount is the output depth
@@ -30,7 +31,6 @@ public class Convolutional implements Layer {
 	private int filterAmount, filterSize;
 	private int dilation, dilatedSize;
 
-	private UpdaterType updaterType;
 	private Initializer initializer;
 	private Activation activation;
 	private Updater filterUpdater;
@@ -53,9 +53,8 @@ public class Convolutional implements Layer {
 	private cl_mem inputBuffer;
 
 	private Convolutional(int pad, int stride, int filterAmount, int filterSize, int dilation, Initializer initializer,
-						  UpdaterType updaterType,
 						  ActivationType activationType) {
-		if (initializer == null || updaterType == null || activationType == null)
+		if (initializer == null || activationType == null)
 			throw new IllegalArgumentException("Values cannot be null.");
 		if (pad < 0)
 			throw new IllegalArgumentException("Pad must be > 0");
@@ -70,7 +69,6 @@ public class Convolutional implements Layer {
 		this.filterSize = filterSize;
 		dilatedSize = (filterSize - 1) * (dilation - 1) + filterSize;
 
-		this.updaterType = updaterType;
 		this.initializer = initializer;
 
 		activation = activationType;
@@ -81,7 +79,7 @@ public class Convolutional implements Layer {
 	 *
 	 * @param dis the input stream
 	 */
-	Convolutional(DataInputStream dis) throws IOException {
+	Convolutional(DataInputStream dis, UpdaterType updaterType) throws IOException {
 		inputHeight = dis.readInt();
 		inputWidth = dis.readInt();
 		depth = dis.readInt();
@@ -97,7 +95,6 @@ public class Convolutional implements Layer {
 		dilatedSize = dis.readInt();
 
 		activation = Activation.fromString(dis);
-		updaterType = UpdaterType.fromString(dis);
 
 		System.out.println("Type: " + getType());
 		System.out.println(String.format("Input Dimensions (h x w x d): %d x %d x %d", inputHeight, inputWidth, depth));
@@ -107,7 +104,6 @@ public class Convolutional implements Layer {
 		System.out.println("Filter Size: " + filterSize);
 		System.out.println(String.format("Output Size (h x w x d): %d x %d x %d", outputHeight, outputWidth, filterAmount));
 		System.out.println("Activation: " + activation.getType());
-		System.out.println("Updater: " + updaterType);
 
 		System.out.println("Importing weights.");
 		filterUpdater = updaterType.create(dis);
@@ -209,10 +205,10 @@ public class Convolutional implements Layer {
 	}
 
 	public void setMode(Mode mode) {
-
+		this.mode = mode;
 	}
 
-	public void setDimensions(int... dimensions) {
+	public void setDimensions(int[] dimensions, UpdaterType updaterType) {
 		System.out.println("Type: " + getType());
 
 		if (dimensions.length < 3)
@@ -248,7 +244,6 @@ public class Convolutional implements Layer {
 			throw new IllegalArgumentException("Invalid filter dimensions.");
 
 		System.out.println("Activation: " + activation.getType());
-		System.out.println("Updater: " + updaterType);
 
 		filters = new float[filterAmount * depth * filterSize * filterSize];
 		filterUpdater = updaterType.create(filters.length);
@@ -322,10 +317,14 @@ public class Convolutional implements Layer {
 
 		inputBuffer = GPU.gpuAlloc(CL.CL_MEM_READ_ONLY, inputMatrix.length, inputMatrix);
 		cl_mem dilatedBuffer = GPU.gpuAlloc(CL.CL_MEM_READ_ONLY, dilated.length, dilated);
+
 		float[] conv = GPU.sgemm(CLBlastTranspose.CLBlastTransposeNo, CLBlastTranspose.CLBlastTransposeYes,
 			outputHeight * outputWidth * batchSize, filterAmount, patchSize, inputBuffer, patchSize, dilatedBuffer, patchSize, biasMatrix,
 			filterAmount);
+
 		CL.clReleaseMemObject(dilatedBuffer);
+		if (mode == Mode.EVAL)
+			CL.clReleaseMemObject(inputBuffer);
 
 		for (int f = 0; f < filterAmount; f++) {
 			for (int i = 0; i < outputHeight * outputWidth; i++) {
@@ -483,7 +482,6 @@ public class Convolutional implements Layer {
 		dos.writeInt(dilatedSize);
 
 		activation.export(dos);
-		updaterType.export(dos);
 
 		filterUpdater.export(dos);
 		biasUpdater.export(dos);
@@ -521,7 +519,6 @@ public class Convolutional implements Layer {
 		private int filterAmount, filterSize;
 		private int dilation;
 		private Initializer initializer;
-		private UpdaterType updaterType;
 		private ActivationType activationType;
 
 		public Builder() {
@@ -593,17 +590,6 @@ public class Convolutional implements Layer {
 		}
 
 		/**
-		 * The updater updates parameters.
-		 *
-		 * @param updaterType the updater type
-		 */
-		public Builder updaterType(UpdaterType updaterType) {
-			this.updaterType = updaterType;
-
-			return this;
-		}
-
-		/**
 		 * The activation simulates a neuron firing.
 		 *
 		 * @param activationType the activation type
@@ -615,7 +601,7 @@ public class Convolutional implements Layer {
 		}
 
 		public Convolutional build() {
-			return new Convolutional(pad, stride, filterAmount, filterSize, dilation, initializer, updaterType, activationType);
+			return new Convolutional(pad, stride, filterAmount, filterSize, dilation, initializer, activationType);
 		}
 	}
 }

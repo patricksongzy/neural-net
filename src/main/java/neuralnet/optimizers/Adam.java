@@ -43,18 +43,26 @@ public class Adam implements Updater {
 	}
 
 	/**
+	 * Initializes parameters. Parameters are ordered as follows: <code>beta1, beta2, epsilon</code>
+	 *
+	 * @param parameters the parameters
+	 */
+	@SuppressWarnings("WeakerAccess")
+	public static void init(float[] parameters) {
+		if (parameters.length != 3)
+			throw new IllegalArgumentException("Invalid parameters.");
+
+		Adam.beta1 = parameters[0];
+		Adam.beta2 = parameters[1];
+		Adam.epsilon = parameters[2];
+	}
+
+	/**
 	 * The learning rate reduces updates overshooting.
 	 *
 	 * @param learningRate the learning rate
 	 */
-	public static void init(float learningRate) {
-		Adam.learningRate = learningRate;
-	}
-
-	public static void init(float beta1, float beta2, float epsilon, float learningRate) {
-		Adam.beta1 = beta1;
-		Adam.beta2 = beta2;
-		Adam.epsilon = epsilon;
+	static void setLearningRate(float learningRate) {
 		Adam.learningRate = learningRate;
 	}
 

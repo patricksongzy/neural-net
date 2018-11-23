@@ -21,20 +21,18 @@ public class Residual implements Layer {
 	private float[] output, residual;
 
 	private Initializer initializer;
-	private UpdaterType updaterType;
 	private Layer[] branch1;
 	private Layer[] branch2;
 
-	private Residual(int filterAmount, int outputDepth, int pad, int stride, Initializer initializer, UpdaterType updaterType) {
+	private Residual(int filterAmount, int outputDepth, int pad, int stride, Initializer initializer) {
 		this.filterAmount = filterAmount;
 		this.outputDepth = outputDepth;
 		this.pad = pad;
 		this.stride = stride;
 		this.initializer = initializer;
-		this.updaterType = updaterType;
 	}
 
-	Residual(DataInputStream dis) throws IOException {
+	Residual(DataInputStream dis, UpdaterType updaterType) throws IOException {
 		height = dis.readInt();
 		width = dis.readInt();
 		depth = dis.readInt();
@@ -44,12 +42,12 @@ public class Residual implements Layer {
 
 		branch1 = new Layer[dis.readInt()];
 		for (int i = 0; i < branch1.length; i++) {
-			branch1[i] = LayerType.fromString(dis);
+			branch1[i] = LayerType.fromString(dis, updaterType);
 		}
 
 		branch2 = new Layer[dis.readInt()];
 		for (int i = 0; i < branch2.length; i++) {
-			branch2[i] = LayerType.fromString(dis);
+			branch2[i] = LayerType.fromString(dis, updaterType);
 		}
 	}
 
@@ -74,7 +72,7 @@ public class Residual implements Layer {
 		}
 	}
 
-	public void setDimensions(int... dimensions) {
+	public void setDimensions(int[] dimensions, UpdaterType updaterType) {
 		if (dimensions.length != 3)
 			throw new IllegalArgumentException("Invalid input dimensions.");
 
@@ -88,34 +86,34 @@ public class Residual implements Layer {
 
 		branch2 = new Layer[]{
 			new Convolutional.Builder().pad(0).stride(1).initializer(initializer).filterSize(1).filterAmount(filterAmount)
-				.activationType(ActivationType.IDENTITY).updaterType(updaterType).build(),
+				.activationType(ActivationType.IDENTITY).build(),
 			new BatchNormalization.Builder().initializer(initializer).activationType(ActivationType.RELU).build(),
 			new Convolutional.Builder().pad(pad).dilation(pad).stride(stride).initializer(initializer).filterSize(3).filterAmount(filterAmount)
-				.activationType(ActivationType.IDENTITY).updaterType(updaterType).build(),
+				.activationType(ActivationType.IDENTITY).build(),
 			new BatchNormalization.Builder().initializer(initializer).activationType(ActivationType.RELU).build(),
 			new Convolutional.Builder().pad(0).stride(1).initializer(initializer).filterSize(1).filterAmount(outputDepth)
-				.activationType(ActivationType.IDENTITY).updaterType(updaterType).build(),
+				.activationType(ActivationType.IDENTITY).build(),
 			new BatchNormalization.Builder().initializer(initializer).build(),
 		};
 
 		if (outputDepth != depth) {
 			branch1 = new Layer[]{
 				new Convolutional.Builder().pad(0).stride(stride).initializer(initializer).filterSize(1).filterAmount(outputDepth)
-					.activationType(ActivationType.IDENTITY).updaterType(updaterType).build(),
+					.activationType(ActivationType.IDENTITY).build(),
 				new BatchNormalization.Builder().initializer(initializer).build(),
 			};
 
-			branch1[0].setDimensions(dimensions);
+			branch1[0].setDimensions(dimensions, updaterType);
 			for (int i = 1; i < branch1.length; i++) {
-				branch1[i].setDimensions(branch1[i - 1].getOutputDimensions());
+				branch1[i].setDimensions(branch1[i - 1].getOutputDimensions(), updaterType);
 			}
 		} else {
 			branch1 = new Layer[0];
 		}
 
-		branch2[0].setDimensions(dimensions);
+		branch2[0].setDimensions(dimensions, updaterType);
 		for (int i = 1; i < branch2.length; i++) {
-			branch2[i].setDimensions(branch2[i - 1].getOutputDimensions());
+			branch2[i].setDimensions(branch2[i - 1].getOutputDimensions(), updaterType);
 		}
 	}
 
@@ -219,7 +217,6 @@ public class Residual implements Layer {
 		private int pad;
 		private int stride;
 		private Initializer initializer;
-		private UpdaterType updaterType;
 
 		public Builder() {
 			outputDepth = -1;
@@ -229,11 +226,6 @@ public class Residual implements Layer {
 
 		public Builder initializer(Initializer initializer) {
 			this.initializer = initializer;
-			return this;
-		}
-
-		public Builder updaterType(UpdaterType updaterType) {
-			this.updaterType = updaterType;
 			return this;
 		}
 
@@ -258,7 +250,7 @@ public class Residual implements Layer {
 		}
 
 		public Residual build() {
-			return new Residual(filterAmount, outputDepth, pad, stride, initializer, updaterType);
+			return new Residual(filterAmount, outputDepth, pad, stride, initializer);
 		}
 	}
 }

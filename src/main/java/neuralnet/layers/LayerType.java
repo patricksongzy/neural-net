@@ -1,5 +1,7 @@
 package neuralnet.layers;
 
+import neuralnet.optimizers.UpdaterType;
+
 import java.io.DataInputStream;
 import java.io.DataOutputStream;
 import java.io.IOException;
@@ -17,24 +19,24 @@ public enum LayerType {
 	 * @param dis the input stream
 	 * @return the layer
 	 */
-	public static Layer fromString(DataInputStream dis) throws IOException {
+	public static Layer fromString(DataInputStream dis, UpdaterType updaterType) throws IOException {
 		switch (valueOf(dis.readUTF())) {
 			case CONVOLUTIONAL:
-				return new Convolutional(dis);
+				return new Convolutional(dis, updaterType);
 			case DROPOUT:
 				return new Dropout(dis);
 			case FEED_FORWARD:
-				return new Dense(dis);
+				return new Dense(dis, updaterType);
 			case POOLING:
 				return new Pooling(dis);
 			case GRU:
-				return new GRU(dis);
+				return new GRU(dis, updaterType);
 			case INCEPTION:
-				return new Inception(dis);
+				return new Inception(dis, updaterType);
 			case RESIDUAL:
-				return new Residual(dis);
+				return new Residual(dis, updaterType);
 			case PSP:
-				return new PSP(dis);
+				return new PSP(dis, updaterType);
 			case BATCH_NORMALIZATION:
 				return new BatchNormalization(dis);
 			case INTERPOLATION:

@@ -1,6 +1,7 @@
 package neuralnet.layers;
 
 import neuralnet.costs.Cost;
+import neuralnet.optimizers.UpdaterType;
 
 import java.io.DataOutputStream;
 import java.io.IOException;
@@ -23,8 +24,9 @@ public interface Layer {
 	 * Sets the dimensions, given a previous layers dimensions.
 	 *
 	 * @param dimensions the dimensions of the previous layer
+	 * @param updaterType the updater type
 	 */
-	void setDimensions(int... dimensions);
+	void setDimensions(int[] dimensions, UpdaterType updaterType);
 
 	/**
 	 * Retrieves the parameters and gradients for gradient checking.

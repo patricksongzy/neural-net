@@ -20,7 +20,7 @@ public class Inception implements Layer {
 	private Layer[] bottleneck;
 	private Layer[] conv;
 
-	private Inception(LinkedList<Integer> filterAmounts, Initializer initializer, UpdaterType updaterType) {
+	private Inception(LinkedList<Integer> filterAmounts, Initializer initializer) {
 		if (filterAmounts.size() != 6)
 			throw new IllegalArgumentException("Filter size lengths not correct");
 
@@ -31,25 +31,25 @@ public class Inception implements Layer {
 
 		bottleneck = new Layer[]{
 			new Convolutional.Builder().pad(0).stride(1).initializer(initializer).filterSize(1).filterAmount(filterAmounts.remove())
-				.activationType(ActivationType.RELU).updaterType(updaterType).build(),
+				.activationType(ActivationType.RELU).build(),
 			new Convolutional.Builder().pad(0).stride(1).initializer(initializer).filterSize(1).filterAmount(filterAmounts.remove())
-				.activationType(ActivationType.RELU).updaterType(updaterType).build(),
+				.activationType(ActivationType.RELU).build(),
 			new Convolutional.Builder().pad(0).stride(1).initializer(initializer).filterSize(1).filterAmount(filterAmounts.remove())
-				.activationType(ActivationType.RELU).updaterType(updaterType).build(),
+				.activationType(ActivationType.RELU).build(),
 			new Pooling.Builder().downsampleSize(3).downsampleStride(1).pad(1).build()
 		};
 
 		conv = new Layer[]{
 			new Convolutional.Builder().pad(1).stride(1).initializer(initializer).filterSize(3).filterAmount(filterAmounts.remove())
-				.activationType(ActivationType.RELU).updaterType(updaterType).build(),
+				.activationType(ActivationType.RELU).build(),
 			new Convolutional.Builder().pad(2).stride(1).initializer(initializer).filterSize(5).filterAmount(filterAmounts.remove())
-				.activationType(ActivationType.RELU).updaterType(updaterType).build(),
+				.activationType(ActivationType.RELU).build(),
 			new Convolutional.Builder().pad(0).stride(1).initializer(initializer).filterSize(1).filterAmount(filterAmounts.remove())
-				.activationType(ActivationType.RELU).updaterType(updaterType).build(),
+				.activationType(ActivationType.RELU).build(),
 		};
 	}
 
-	Inception(DataInputStream dis) throws IOException {
+	Inception(DataInputStream dis, UpdaterType updaterType) throws IOException {
 		height = dis.readInt();
 		width = dis.readInt();
 		depth = dis.readInt();
@@ -61,12 +61,12 @@ public class Inception implements Layer {
 
 		bottleneck = new Layer[dis.readInt()];
 		for (int i = 0; i < bottleneck.length; i++) {
-			bottleneck[i] = LayerType.fromString(dis);
+			bottleneck[i] = LayerType.fromString(dis, updaterType);
 		}
 
 		conv = new Layer[dis.readInt()];
 		for (int i = 0; i < conv.length; i++) {
-			conv[i] = LayerType.fromString(dis);
+			conv[i] = LayerType.fromString(dis, updaterType);
 		}
 	}
 
@@ -93,7 +93,7 @@ public class Inception implements Layer {
 		}
 	}
 
-	public void setDimensions(int... dimensions) {
+	public void setDimensions(int[] dimensions, UpdaterType updaterType) {
 		if (dimensions.length != 3)
 			throw new IllegalArgumentException("Invalid input dimensions.");
 
@@ -102,11 +102,11 @@ public class Inception implements Layer {
 		this.depth = dimensions[2];
 
 		for (Layer layer : bottleneck) {
-			layer.setDimensions(dimensions);
+			layer.setDimensions(dimensions, updaterType);
 		}
 
 		for (int i = 0; i < conv.length; i++) {
-			conv[i].setDimensions(bottleneck[i + 1].getOutputDimensions());
+			conv[i].setDimensions(bottleneck[i + 1].getOutputDimensions(), updaterType);
 		}
 	}
 
@@ -256,7 +256,6 @@ public class Inception implements Layer {
 	@SuppressWarnings({"unused", "WeakerAccess"})
 	public static class Builder {
 		private Initializer initializer;
-		private UpdaterType updaterType;
 		private LinkedList<Integer> filterAmounts = new LinkedList<>();
 
 		public Builder filterAmount(int... filterAmounts) {
@@ -270,13 +269,8 @@ public class Inception implements Layer {
 			return this;
 		}
 
-		public Builder updaterType(UpdaterType updaterType) {
-			this.updaterType = updaterType;
-			return this;
-		}
-
 		public Inception build() {
-			return new Inception(filterAmounts, initializer, updaterType);
+			return new Inception(filterAmounts, initializer);
 		}
 	}
 }

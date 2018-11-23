@@ -40,20 +40,18 @@ public class GRU implements Layer {
 	private LinkedList<float[]> xh, xrh, z, r, hc, y;
 
 	private Initializer initializer;
-	private UpdaterType updaterType;
 	private Updater[] weightUpdaters;
 	private Updater[] biasUpdaters;
 	private Activation hiddenActivation, activation;
 
-	private GRU(int outputSize, Initializer initializer, UpdaterType updaterType, ActivationType hiddenActivation,
+	private GRU(int outputSize, Initializer initializer, ActivationType hiddenActivation,
 				ActivationType activation) {
-		if (initializer == null || activation == null || hiddenActivation == null || updaterType == null)
+		if (initializer == null || activation == null || hiddenActivation == null)
 			throw new IllegalArgumentException("Values cannot be null.");
 
 		this.outputSize = outputSize;
 		this.hiddenActivation = hiddenActivation;
 		this.activation = activation;
-		this.updaterType = updaterType;
 		this.initializer = initializer;
 
 		bz = new float[outputSize];
@@ -61,7 +59,7 @@ public class GRU implements Layer {
 		bh = new float[outputSize];
 	}
 
-	GRU(DataInputStream dis) throws IOException {
+	GRU(DataInputStream dis, UpdaterType updaterType) throws IOException {
 		System.out.println("Type: " + getType());
 
 		inputSize = dis.readInt();
@@ -81,9 +79,6 @@ public class GRU implements Layer {
 		hiddenActivation = Activation.fromString(dis);
 		activation = Activation.fromString(dis);
 		System.out.println("Activations (z/r, hc): " + hiddenActivation.getType() + ", " + activation.getType());
-
-		updaterType = UpdaterType.fromString(dis);
-		System.out.println("Updater type: " + updaterType);
 
 		biasUpdaters = new Updater[3];
 		weightUpdaters = new Updater[3];
@@ -109,7 +104,7 @@ public class GRU implements Layer {
 		System.out.println("Done importing weights.");
 	}
 
-	public void setDimensions(int... dimensions) {
+	public void setDimensions(int[] dimensions, UpdaterType updaterType) {
 		System.out.println("Type: " + getType());
 
 		inputSize = dimensions[0];
@@ -125,7 +120,6 @@ public class GRU implements Layer {
 			throw new IllegalArgumentException("Invalid output dimensions.");
 
 		System.out.println("Activations (z/r, hc): " + hiddenActivation.getType() + ", " + activation.getType());
-		System.out.println("Updater type: " + updaterType);
 
 		wz = new float[outputSize * inputSize + outputSize * outputSize];
 		wr = new float[outputSize * inputSize + outputSize * outputSize];
@@ -199,7 +193,6 @@ public class GRU implements Layer {
 
 		hiddenActivation.export(dos);
 		activation.export(dos);
-		updaterType.export(dos);
 
 		for (int i = 0; i < 3; i++) {
 			weightUpdaters[i].export(dos);
@@ -449,7 +442,6 @@ public class GRU implements Layer {
 		private Initializer initializer;
 		private ActivationType hiddenActivation;
 		private ActivationType activation;
-		private UpdaterType updaterType;
 
 		public Builder() {
 			hiddenActivation = ActivationType.SIGMOID;
@@ -475,14 +467,8 @@ public class GRU implements Layer {
 			return this;
 		}
 
-		public Builder updaterType(UpdaterType updaterType) {
-			this.updaterType = updaterType;
-
-			return this;
-		}
-
 		public GRU build() {
-			return new GRU(hiddenSize, initializer, updaterType, hiddenActivation, activation);
+			return new GRU(hiddenSize, initializer, hiddenActivation, activation);
 		}
 	}
 }

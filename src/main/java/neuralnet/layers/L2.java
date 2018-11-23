@@ -1,6 +1,7 @@
 package neuralnet.layers;
 
 import neuralnet.costs.Cost;
+import neuralnet.optimizers.UpdaterType;
 
 import java.io.DataInputStream;
 import java.io.DataOutputStream;
@@ -22,7 +23,7 @@ public class L2 implements Layer {
 		epsilon = dis.readFloat();
 	}
 
-	public void setDimensions(int... dimensions) {
+	public void setDimensions(int[] dimensions, UpdaterType updaterType) {
 		inputSize = dimensions[0];
 		for (int i = 1; i < dimensions.length; i++)
 			inputSize *= dimensions[i];

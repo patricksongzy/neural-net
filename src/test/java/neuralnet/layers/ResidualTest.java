@@ -11,8 +11,8 @@ class ResidualTest {
 	@Test
 	void forward() {
 		Residual residual =
-			new Residual.Builder().filterAmount(64).initializer(new HeInitialization()).updaterType(UpdaterType.ADAM).outputDepth(128).build();
-		residual.setDimensions(28, 28, 3);
+			new Residual.Builder().filterAmount(64).initializer(new HeInitialization()).outputDepth(128).build();
+		residual.setDimensions(new int[]{28, 28, 3}, UpdaterType.ADAM);
 
 		float[] input = new float[28 * 28 * 3];
 		for (int i = 0; i < input.length; i++)

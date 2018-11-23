@@ -13,9 +13,9 @@ class GRUTest {
 	void gradientTest() {
 		// just a regular test
 		Model model = new Model.Builder()
-			.add(new GRU.Builder().hiddenSize(5).initializer(new HeInitialization()).updaterType(UpdaterType.ADAM).build())
-			.add(new GRU.Builder().hiddenSize(5).initializer(new HeInitialization()).updaterType(UpdaterType.ADAM).build())
-			.inputDimensions(2).cost(CostType.MEAN_SQUARE_ERROR).build();
+			.add(new GRU.Builder().hiddenSize(5).initializer(new HeInitialization()).build())
+			.add(new GRU.Builder().hiddenSize(5).initializer(new HeInitialization()).build())
+			.inputDimensions(2).cost(CostType.MEAN_SQUARE_ERROR).updaterType(UpdaterType.ADAM).build();
 		model.export("src/test/resources/gru-import-test.model");
 		model = new Model("src/test/resources/gru-import-test.model");
 
