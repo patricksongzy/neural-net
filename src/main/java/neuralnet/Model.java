@@ -156,7 +156,7 @@ public class Model {
 		tasks.clear();
 	}
 
-	public void train(Map<float[], Float> data, int batchSize, int epochs, float learningRate, float decay, int restartInterval,
+	public void train(Map<float[], Float> data, int batchSize, int epochs, float max, float min, float decay, int restartInterval,
 					  int restartMultiplier) {
 		new Thread(() -> Application.launch(Plot.class, (String) null)).start();
 
@@ -169,15 +169,17 @@ public class Model {
 		int inputSize = keys.get(0).length;
 
 		int batch = 0;
-		updaterType.init(learningRate);
-		for (int i = 1, current = 1; i <= epochs; i++, current++) {
+		updaterType.init(max);
+		updaterType.setDecay(decay * (float) Math.sqrt((float) batchSize / (keys.size() * restartInterval)));
+
+		for (int i = 1, current = 0; i <= epochs; i++, current++) {
 			if (current == restartInterval) {
-				updaterType.init(learningRate);
+				updaterType.init(max);
 				restartInterval *= restartMultiplier;
 				current = 0;
 				updaterType.setDecay(decay * (float) Math.sqrt((float) batchSize / (keys.size() * restartInterval)));
 			} else {
-				updaterType.init(0.5f + 0.5f * (float) Math.cos((float) current / restartInterval * Math.PI));
+				updaterType.init(min + 0.5f * (max - min) * (1 + (float) Math.cos(current * Math.PI / restartInterval)));
 			}
 
 			// shuffling data prevents the neural network from learning the order of the data

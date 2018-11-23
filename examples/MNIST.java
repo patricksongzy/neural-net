@@ -95,6 +95,6 @@ public class MNIST {
 		}
 
 		// train model
-		model.train(trainData, batchSize, epochs, 0.001f, 0.005f, epochs / 10, 2);
+		model.train(trainData, batchSize, epochs, 0.05f, 0.0001f, 0.005f, epochs / 10, 2);
 	}
 }
