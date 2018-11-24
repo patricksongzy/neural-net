@@ -240,13 +240,13 @@ public class Inception implements Layer {
 		return parameters;
 	}
 
-	public void update(int size) {
+	public void update() {
 		for (Layer layer : bottleneck) {
-			layer.update(size);
+			layer.update();
 		}
 
 		for (Layer layer : conv) {
-			layer.update(size);
+			layer.update();
 		}
 	}
 

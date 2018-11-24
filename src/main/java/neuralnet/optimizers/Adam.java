@@ -99,11 +99,11 @@ public class Adam implements Updater {
 		float mt = 1 - (float) Math.pow(beta1, t);
 		float vt = 1 - (float) Math.pow(beta2, t);
 
-		m = GPU.saxpy(size, beta1, m, GPU.sscal(size, b1, gradient));
+		m = GPU.saxpy(size, beta1, m, GPU.sscal(size, b1 / scale, gradient));
 
 		IntStream.range(0, size).parallel().forEach(i -> {
-			v[i] = v[i] * beta2 + b2 * gradient[i] * gradient[i];
-			parameters[i] -= (float) ((learningRate * (m[i] / mt)) / (Math.sqrt(v[i] / vt) + epsilon)) / scale;
+			v[i] = v[i] * beta2 + b2 * (float) Math.pow(gradient[i] / scale, 2);
+			parameters[i] -= (learningRate * (m[i] / mt)) / (Math.sqrt(v[i] / vt) + epsilon);
 		});
 	}
 

@@ -457,9 +457,9 @@ public class Convolutional implements Layer {
 		return removePad(input, batchSize, pad, depth, padWidth, inputHeight, inputWidth);
 	}
 
-	public void update(int scale) {
-		biasUpdater.update(biases, biasGradient, scale);
-		filterUpdater.update(filters, gradient, scale);
+	public void update() {
+		biasUpdater.update(biases, biasGradient, batchSize);
+		filterUpdater.update(filters, gradient, batchSize);
 	}
 
 	public float[][][] getParameters() {

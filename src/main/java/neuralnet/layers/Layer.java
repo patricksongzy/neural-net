@@ -65,10 +65,8 @@ public interface Layer {
 
 	/**
 	 * Updates a layer's parameters.
-	 *
-	 * @param scale the scale
 	 */
-	void update(int scale);
+	void update();
 
 	/**
 	 * Gets the output dimensions, for initializing following layers.

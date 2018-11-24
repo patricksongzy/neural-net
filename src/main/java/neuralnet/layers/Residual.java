@@ -200,13 +200,13 @@ public class Residual implements Layer {
 		return parameters;
 	}
 
-	public void update(int size) {
+	public void update() {
 		for (Layer layer : branch1) {
-			layer.update(size);
+			layer.update();
 		}
 
 		for (Layer layer : branch2) {
-			layer.update(size);
+			layer.update();
 		}
 	}
 

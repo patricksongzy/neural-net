@@ -137,12 +137,12 @@ public class Model {
 	}
 
 	@SuppressWarnings("WeakerAccess")
-	public void update(int size) {
+	public void update() {
 		List<Callable<Void>> tasks = new ArrayList<>();
 
 		for (Layer layer : layers) {
 			tasks.add(() -> {
-				layer.update(size);
+				layer.update();
 				return null;
 			});
 		}
@@ -157,7 +157,7 @@ public class Model {
 	}
 
 	public void train(Map<float[], Float> data, int batchSize, int epochs, float max, float min, float decay, int restartInterval,
-					  int restartMultiplier) {
+					  int restartMultiplier, int checkpoint, String name) {
 		new Thread(() -> Application.launch(Plot.class, (String) null)).start();
 
 		// setting mode to training mode
@@ -174,13 +174,20 @@ public class Model {
 
 		for (int i = 1, current = 0; i <= epochs; i++, current++) {
 			if (current == restartInterval) {
-				updaterType.init(max);
-				restartInterval *= restartMultiplier;
+				System.out.println("Epoch: " + i + "/" + epochs + " - restarting");
+
 				current = 0;
+				restartInterval *= restartMultiplier;
+
+				updaterType.init(max);
 				updaterType.setDecay(decay * (float) Math.sqrt((float) batchSize / (keys.size() * restartInterval)));
 			} else {
+				System.out.println("Epoch: " + i + "/" + epochs);
 				updaterType.init(min + 0.5f * (max - min) * (1 + (float) Math.cos(current * Math.PI / restartInterval)));
 			}
+
+			if (i % checkpoint == 0)
+				export(name);
 
 			// shuffling data prevents the neural network from learning the order of the data
 			Collections.shuffle(keys);
@@ -206,10 +213,10 @@ public class Model {
 				// back propagating batch
 				backward(targets);
 
-				update(s);
+				update();
 
-				int progress = (int) ((float) j / keys.size() * 30 + 0.5);
-				System.out.printf("\r%d/%d [", j, keys.size());
+				int progress = (int) ((float) (j + s) / keys.size() * 30 + 0.5);
+				System.out.printf("\r%d/%d [", j + s, keys.size());
 
 				for (int k = 0; k < progress; k++)
 					System.out.print("#");
@@ -221,6 +228,8 @@ public class Model {
 
 				Plot.update(batch, average);
 			}
+
+			System.out.println();
 		}
 	}
 
@@ -493,6 +502,8 @@ public class Model {
 
 			// exporting cost
 			cost.getType().export(dos);
+
+			System.out.println("Exported to: " + file);
 		} catch (IOException e) {
 			e.printStackTrace();
 		}

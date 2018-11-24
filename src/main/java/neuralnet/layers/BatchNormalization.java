@@ -192,7 +192,7 @@ public class BatchNormalization implements Layer {
 			{mean, new float[mean.length]}, {variance, new float[variance.length]}};
 	}
 
-	public void update(int size) {
+	public void update() {
 	}
 
 	/**

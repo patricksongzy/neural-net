@@ -37,7 +37,7 @@ class PoolingTest {
 			new Convolutional.Builder().filterAmount(8).filterSize(2).initializer(new HeInitialization())
 				.pad(2).stride(2).activationType(ActivationType.RELU).build()
 		).add(
-			new Pooling.Builder().downsampleSize(2).downsampleStride(2).mode(Pooling.Mode.AVERAGE).build()
+			new Pooling.Builder().downsampleSize(2).downsampleStride(2).mode(Pooling.Mode.MAX).build()
 		).add(
 			new Convolutional.Builder().filterAmount(8).filterSize(2).initializer(new HeInitialization())
 				.pad(1).stride(1).activationType(ActivationType.RELU).build()

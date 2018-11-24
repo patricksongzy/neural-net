@@ -17,9 +17,11 @@ public class AMSGrad implements Updater {
 	private static float beta1 = 0.9f;
 	private static float beta2 = 0.999f;
 	private static float epsilon = 1e-8f;
+	private static float partial = 0.125f;
 	private static float decay = 0.001f;
 	private static float learningRate = 0.0001f;
 
+	private int t;
 	private int size;
 	private float[] m, v;
 
@@ -31,6 +33,7 @@ public class AMSGrad implements Updater {
 	}
 
 	AMSGrad(DataInputStream dis) throws IOException {
+		t = dis.readInt();
 		size = dis.readInt();
 
 		m = new float[size];
@@ -43,18 +46,19 @@ public class AMSGrad implements Updater {
 	}
 
 	/**
-	 * Initializes parameters. Parameters are ordered as follows: <code>beta1, beta2, epsilon</code>
+	 * Initializes parameters. Parameters are ordered as follows: <code>beta1, beta2, epsilon, partial</code>
 	 *
 	 * @param parameters the parameters
 	 */
 	@SuppressWarnings("WeakerAccess")
 	public static void init(float[] parameters) {
-		if (parameters.length != 3)
+		if (parameters.length != 4)
 			throw new IllegalArgumentException("Invalid parameters.");
 
 		AMSGrad.beta1 = parameters[0];
 		AMSGrad.beta2 = parameters[1];
 		AMSGrad.epsilon = parameters[2];
+		AMSGrad.partial = parameters[3];
 	}
 
 	/**
@@ -79,7 +83,7 @@ public class AMSGrad implements Updater {
 		beta1 = dis.readFloat();
 		beta2 = dis.readFloat();
 		epsilon = dis.readFloat();
-		learningRate = dis.readFloat();
+		partial = dis.readFloat();
 	}
 
 	/**
@@ -91,22 +95,26 @@ public class AMSGrad implements Updater {
 		dos.writeFloat(beta1);
 		dos.writeFloat(beta2);
 		dos.writeFloat(epsilon);
-		dos.writeFloat(learningRate);
+		dos.writeFloat(partial);
 	}
 
 	public void update(float[] parameters, float[] gradient, int scale) {
+		t++;
+		double corrected = learningRate * Math.sqrt(1 - Math.pow(beta2, t)) / Math.sqrt(1 - Math.pow(beta1, t));
+
 		float b1 = 1 - beta1;
 		float b2 = 1 - beta2;
 
-		m = GPU.saxpy(size, beta1, m, GPU.sscal(size, b1, gradient));
+		m = GPU.saxpy(size, beta1, m, GPU.sscal(size, b1 / scale, gradient));
 
 		IntStream.range(0, size).parallel().forEach(i -> {
-			v[i] = Math.max(v[i], v[i] * beta2 + b2 * gradient[i] * gradient[i]);
-			parameters[i] -= learningRate * (m[i] / (scale * (Math.sqrt(v[i]) + epsilon)) + decay * parameters[i]);
+			v[i] = Math.max(v[i], v[i] * beta2 + b2 * (float) Math.pow(gradient[i] / scale, 2));
+			parameters[i] -= corrected * (m[i] / Math.pow(Math.sqrt(v[i]) + epsilon, partial * 2) + decay * parameters[i]);
 		});
 	}
 
 	public void export(DataOutputStream dos) throws IOException {
+		dos.writeInt(t);
 		dos.writeInt(size);
 
 		for (int i = 0; i < size; i++) {

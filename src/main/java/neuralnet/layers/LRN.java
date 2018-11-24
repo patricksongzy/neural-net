@@ -90,7 +90,7 @@ public class LRN implements Layer {
 		return new float[0][][];
 	}
 
-	public void update(int size) {
+	public void update() {
 	}
 
 	public void export(DataOutputStream dos) throws IOException {

@@ -14,10 +14,11 @@ public class HeInitialization implements Initializer {
 	}
 
 	private static double truncatedNormal(double stddev) {
-		double random = ThreadLocalRandom.current().nextGaussian();
-		while (Math.abs(random) > 2 * stddev)
-			random = ThreadLocalRandom.current().nextGaussian();
+		double random;
+		do {
+			random = ThreadLocalRandom.current().nextGaussian() * stddev;
+		} while (Math.abs(random) > 2 * stddev);
 
-		return random * stddev;
+		return random;
 	}
 }

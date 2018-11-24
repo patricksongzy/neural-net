@@ -403,14 +403,14 @@ public class GRU implements Layer {
 		return new float[][][]{{wz, dWz}, {wr, dWr}, {wh, dWh}, {bz, dBz}, {br, dBr}, {bh, dBh}};
 	}
 
-	public void update(int scale) {
-		weightUpdaters[0].update(wz, dWz, scale);
-		weightUpdaters[1].update(wr, dWr, scale);
-		weightUpdaters[2].update(wh, dWh, scale);
+	public void update() {
+		weightUpdaters[0].update(wz, dWz, batchSize);
+		weightUpdaters[1].update(wr, dWr, batchSize);
+		weightUpdaters[2].update(wh, dWh, batchSize);
 
-		biasUpdaters[0].update(bz, dBz, scale);
-		biasUpdaters[1].update(br, dBr, scale);
-		biasUpdaters[2].update(bh, dBh, scale);
+		biasUpdaters[0].update(bz, dBz, batchSize);
+		biasUpdaters[1].update(br, dBr, batchSize);
+		biasUpdaters[2].update(bh, dBh, batchSize);
 
 		transposeWeights();
 

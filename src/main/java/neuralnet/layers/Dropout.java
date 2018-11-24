@@ -76,7 +76,7 @@ public class Dropout implements Layer {
 		return new float[0][][];
 	}
 
-	public void update(int size) {
+	public void update() {
 	}
 
 	public float[] forward(float[] input, int batchSize) {

@@ -212,9 +212,9 @@ public class Dense implements Layer {
 		return delta;
 	}
 
-	public void update(int scale) {
-		weightUpdater.update(weights, gradient, scale);
-		biasUpdater.update(biases, biasGradient, scale);
+	public void update() {
+		weightUpdater.update(weights, gradient, batchSize);
+		biasUpdater.update(biases, biasGradient, batchSize);
 
 		gradient = new float[outputSize * inputSize];
 		biasGradient = new float[outputSize];

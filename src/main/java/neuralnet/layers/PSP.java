@@ -225,7 +225,7 @@ public class PSP implements Layer {
 		return parameters;
 	}
 
-	public void update(int size) {
+	public void update() {
 	}
 
 	/**

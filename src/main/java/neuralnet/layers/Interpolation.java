@@ -166,7 +166,7 @@ public class Interpolation implements Layer {
 		return new float[0][][];
 	}
 
-	public void update(int size) {
+	public void update() {
 	}
 
 	/**
