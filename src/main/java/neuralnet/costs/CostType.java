@@ -110,7 +110,7 @@ public enum CostType implements Cost {
 
 			float cost = 0;
 			for (int b = 0; b < targets.length; b++) {
-				if (targets[b] > output.length)
+				if (targets[b] > size)
 					throw new IllegalArgumentException("Invalid target.");
 
 				cost += Math.log(output[(int) targets[b] + size * b] + 1e-16);
@@ -130,7 +130,7 @@ public enum CostType implements Cost {
 			float[] delta = new float[output.length];
 
 			IntStream.range(0, batchSize).parallel().forEach(b -> {
-				if (targets[b] > output.length)
+				if (targets[b] > size)
 					throw new IllegalArgumentException("Invalid targets.");
 
 				int index = (int) targets[b] + size * b;

@@ -66,7 +66,7 @@ public interface Layer {
 	/**
 	 * Updates a layer's parameters.
 	 */
-	void update();
+	void update(int length);
 
 	/**
 	 * Gets the output dimensions, for initializing following layers.

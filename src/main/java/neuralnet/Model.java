@@ -9,10 +9,7 @@ import neuralnet.optimizers.UpdaterType;
 import plot.Plot;
 
 import java.io.*;
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 import java.util.concurrent.Callable;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.ThreadPoolExecutor;
@@ -48,8 +45,9 @@ public class Model {
 	private Model(Layer[] layers, CostType costType, UpdaterType updaterType, int[] inputDimensions) {
 		if (layers.length <= 0)
 			throw new IllegalArgumentException("Invalid layer amount.");
-		if (costType == null || updaterType == null || inputDimensions == null)
-			throw new IllegalArgumentException("Values cannot be null.");
+		Objects.requireNonNull(costType);
+		Objects.requireNonNull(updaterType);
+		Objects.requireNonNull(inputDimensions);
 
 		this.layers = layers;
 		this.cost = costType;
@@ -137,12 +135,12 @@ public class Model {
 	}
 
 	@SuppressWarnings("WeakerAccess")
-	public void update() {
+	public void update(int length) {
 		List<Callable<Void>> tasks = new ArrayList<>();
 
 		for (Layer layer : layers) {
 			tasks.add(() -> {
-				layer.update();
+				layer.update(length);
 				return null;
 			});
 		}
@@ -213,7 +211,7 @@ public class Model {
 				// back propagating batch
 				backward(targets);
 
-				update();
+				update(s);
 
 				int progress = (int) ((float) (j + s) / keys.size() * 30 + 0.5);
 				System.out.printf("\r%d/%d [", j + s, keys.size());
@@ -227,6 +225,217 @@ public class Model {
 				System.out.print("] - loss: " + average);
 
 				Plot.update(batch, average);
+			}
+
+			System.out.println();
+		}
+	}
+
+	public void train(Map<float[][], float[]> data, int batchSize, int bptt, int epochs, float max, float min, float decay,
+					  int restartInterval,
+					  int restartMultiplier, int checkpoint, String name) {
+		new Thread(() -> Application.launch(Plot.class, (String) null)).start();
+
+		// setting mode to training mode
+		setMode(Layer.Mode.TRAIN);
+
+		List<float[][]> keys = new ArrayList<>(data.keySet());
+		keys.sort(Comparator.comparingInt(c -> c.length));
+
+		updaterType.setDecay(decay * (float) Math.sqrt((float) 1 / (keys.size() * restartInterval)));
+
+		int batch = 0;
+		updaterType.init(max);
+		updaterType.setDecay(decay * (float) Math.sqrt((float) 1 / (keys.size() * restartInterval)));
+
+		for (int i = 1, current = 0; i <= epochs; i++, current++) {
+			if (current == restartInterval) {
+				System.out.println("Epoch: " + i + "/" + epochs + " - restarting");
+
+				current = 0;
+				restartInterval *= restartMultiplier;
+
+				updaterType.init(max);
+				updaterType.setDecay(decay * (float) Math.sqrt((float) 1 / (keys.size() * restartInterval)));
+			} else {
+				System.out.println("Epoch: " + i + "/" + epochs);
+				updaterType.init(min + 0.5f * (max - min) * (1 + (float) Math.cos(current * Math.PI / restartInterval)));
+			}
+
+			if (i % checkpoint == 0)
+				export(name);
+
+			// looping through the training set
+			for (int j = 0; j < keys.size(); j += batchSize, batch++) {
+				// batch size
+				int s = j + batchSize > keys.size() ? keys.size() % batchSize : batchSize;
+				// step size
+				int step = bptt;
+				// shortest length
+				int shortest = Integer.MAX_VALUE;
+
+				float average = 0;
+
+				for (int b = 0; b < s; b++) {
+					if (keys.get(b + j).length < step)
+						step = keys.get(b + j).length;
+					if (keys.get(b + j).length < shortest)
+						shortest = keys.get(b + j).length;
+				}
+
+				for (int k = 0; k < shortest; k += step) {
+					int n = k + step > shortest ? shortest % step : step;
+
+					float[][] inputs = new float[n][s * inputSize];
+					float[][] targets = new float[n][s];
+
+					for (int t = 0; t < n; t++) {
+						for (int b = 0; b < s; b++) {
+							// creating a batch
+							System.arraycopy(keys.get(b + j)[t + k], 0, inputs[t], b * inputSize, inputSize);
+							targets[t][b] = data.get(keys.get(b + j))[t + k];
+						}
+					}
+
+					// forward propagating the batch
+					float[][] output = forward(inputs, s);
+
+					// back propagating batch
+					backward(targets);
+					update(n * s);
+
+					for (int t = 0; t < n; t++)
+						average += cost.cost(output[t], targets[t]);
+
+					average /= n * s;
+				}
+
+				int progress = (int) ((float) (j + s) / keys.size() * 30 + 0.5);
+				System.out.printf("\r%d/%d [", j + s, keys.size());
+
+				for (int m = 0; m < progress; m++)
+					System.out.print("#");
+				for (int m = progress; m < 30; m++)
+					System.out.print("-");
+
+				System.out.print("] - loss: " + average);
+
+				Plot.update(batch, average);
+
+				if ((j + 1) % 100 == 0)
+					export(name);
+			}
+
+			System.out.println();
+		}
+	}
+
+	public void trainOneHot(Map<float[], float[]> data, int batchSize, int bptt, int epochs, float max, float min, float decay,
+							int restartInterval,
+							int restartMultiplier, int checkpoint, String name) {
+		new Thread(() -> Application.launch(Plot.class, (String) null)).start();
+
+		// setting mode to training mode
+		setMode(Layer.Mode.TRAIN);
+
+		List<float[]> keys = new ArrayList<>(data.keySet());
+		keys.sort(Comparator.comparingInt(c -> c.length));
+
+		updaterType.setDecay(decay * (float) Math.sqrt((float) 1 / (keys.size() * restartInterval)));
+
+		int batch = 0;
+		updaterType.init(max);
+		updaterType.setDecay(decay * (float) Math.sqrt((float) 1 / (keys.size() * restartInterval)));
+
+		for (int i = 1, current = 0; i <= epochs; i++, current++) {
+			if (current == restartInterval) {
+				System.out.println("Epoch: " + i + "/" + epochs + " - restarting");
+
+				current = 0;
+				restartInterval *= restartMultiplier;
+
+				updaterType.init(max);
+				updaterType.setDecay(decay * (float) Math.sqrt((float) 1 / (keys.size() * restartInterval)));
+			} else {
+				System.out.println("Epoch: " + i + "/" + epochs);
+				updaterType.init(min + 0.5f * (max - min) * (1 + (float) Math.cos(current * Math.PI / restartInterval)));
+			}
+
+			if (i % checkpoint == 0)
+				export(name);
+
+			// looping through the training set
+			for (int j = 0; j < keys.size(); j += batchSize, batch++) {
+				// batch size
+				int s = j + batchSize > keys.size() ? keys.size() % batchSize : batchSize;
+				// step size
+				int step = bptt;
+				// shortest length
+				int shortest = Integer.MAX_VALUE;
+
+				float average = 0;
+
+				for (int b = 0; b < s; b++) {
+					if (keys.get(b + j).length < step)
+						step = keys.get(b + j).length;
+					if (keys.get(b + j).length < shortest)
+						shortest = keys.get(b + j).length;
+				}
+
+				for (int k = 0; k < shortest; k += step) {
+					int n = k + step > shortest ? shortest % step : step;
+
+					float[][] inputs = new float[n][s * inputSize];
+					float[][] targets = new float[n][s];
+
+					for (int t = 0; t < n; t++) {
+						for (int b = 0; b < s; b++) {
+							// creating a batch
+							inputs[t][(int) keys.get(b + j)[t + k] + inputSize * b] = 1;
+							targets[t][b] = data.get(keys.get(b + j))[t + k];
+						}
+					}
+
+					// forward propagating the batch
+					float[][] output = forward(inputs, s);
+
+					// back propagating batch
+					backward(targets);
+					update(n * s);
+
+					for (int t = 0; t < n; t++) {
+						average += cost.cost(output[t], targets[t]);
+
+						int size = output[t].length / s;
+						int index = -1;
+						float top = Float.NEGATIVE_INFINITY;
+						for (int m = 0; m < size; m++) {
+							if (output[t][m] > top) {
+								top = output[t][m];
+								index = m;
+							}
+						}
+
+						System.out.println(index + " " + targets[t][0]);
+					}
+
+					average /= n * s;
+				}
+
+				int progress = (int) ((float) (j + s) / keys.size() * 30 + 0.5);
+				System.out.printf("\r%d/%d [", j + s, keys.size());
+
+				for (int m = 0; m < progress; m++)
+					System.out.print("#");
+				for (int m = progress; m < 30; m++)
+					System.out.print("-");
+
+				System.out.print("] - loss: " + average);
+
+				Plot.update(batch, average);
+
+				if ((j + 1) % 100 == 0)
+					export(name);
 			}
 
 			System.out.println();

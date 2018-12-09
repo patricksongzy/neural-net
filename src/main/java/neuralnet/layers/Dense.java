@@ -13,6 +13,8 @@ import org.jocl.cl_mem;
 import java.io.DataInputStream;
 import java.io.DataOutputStream;
 import java.io.IOException;
+import java.util.LinkedList;
+import java.util.Objects;
 
 /**
  * Dense layers have a weight for each input. The inputs are multiplied to the weights, summed, then a bias term is added. The
@@ -31,8 +33,9 @@ public class Dense implements Layer {
 	private Updater biasUpdater;
 	private float[] weights, biases;
 	private float[] gradient, biasGradient;
-	private float[] output;
-	private cl_mem inputBuffer, weightBuffer;
+	private cl_mem weightBuffer;
+	private LinkedList<cl_mem> inputs = new LinkedList<>();
+	private LinkedList<float[]> outputs = new LinkedList<>();
 
 	/**
 	 * Initializes a Dense layer neural network from a file.
@@ -77,8 +80,8 @@ public class Dense implements Layer {
 	}
 
 	private Dense(int outputSize, float temperature, Initializer initializer, Activation activation) {
-		if (initializer == null || activation == null)
-			throw new IllegalArgumentException("Values cannot be null.");
+		Objects.requireNonNull(initializer);
+		Objects.requireNonNull(activation);
 
 		if (activation.getType() != Activation.Type.SOFTMAX && temperature != 1) {
 			System.err.println("WARNING: Temperature is usually used with softmax.");
@@ -141,16 +144,25 @@ public class Dense implements Layer {
 	public float[] forward(float[] input, int batchSize) {
 		this.batchSize = batchSize;
 
-		output = new float[batchSize * outputSize];
+		float[] output = new float[batchSize * outputSize];
 
 		for (int b = 0; b < batchSize; b++)
 			System.arraycopy(biases, 0, output, b * outputSize, outputSize);
 
-		inputBuffer = GPU.gpuAlloc(CL.CL_MEM_READ_ONLY, input.length, input);
-		weightBuffer = GPU.gpuAlloc(CL.CL_MEM_READ_ONLY, weights.length, weights);
+		cl_mem inputBuffer = GPU.gpuAlloc(CL.CL_MEM_READ_ONLY, input.length, input);
+		if (mode == Mode.GRADIENT_CHECK && weightBuffer != null) {
+			CL.clReleaseMemObject(weightBuffer);
+			weightBuffer = null;
+		}
+
+		if (weightBuffer == null)
+			weightBuffer = GPU.gpuAlloc(CL.CL_MEM_READ_ONLY, weights.length, weights);
 
 		output = GPU.sgemm(CLBlastTranspose.CLBlastTransposeNo, CLBlastTranspose.CLBlastTransposeYes, batchSize,
 			outputSize, inputSize, inputBuffer, inputSize, weightBuffer, inputSize, output, outputSize);
+
+		// activating output
+		activation.activation(output, batchSize);
 
 		if (mode == Mode.EVAL) {
 			if (temperature != 1) {
@@ -161,16 +173,18 @@ public class Dense implements Layer {
 
 			CL.clReleaseMemObject(inputBuffer);
 			CL.clReleaseMemObject(weightBuffer);
+			weightBuffer = null;
+		} else {
+			inputs.push(inputBuffer);
+			outputs.push(output);
 		}
-
-		// activating output
-		activation.activation(output, batchSize);
 
 		return output;
 	}
 
 	public float[] backward(Cost cost, float[] target, boolean calculateDelta) {
 		float[] previousDelta;
+		float[] output = outputs.peekFirst();
 
 		if (activation.getType() == Activation.Type.SOFTMAX)
 			previousDelta = cost.derviativeSoftmax(output, target, batchSize);
@@ -181,6 +195,7 @@ public class Dense implements Layer {
 	}
 
 	public float[] backward(float[] previousDelta, boolean calculateDelta) {
+		float[] output = outputs.pop();
 		output = activation.derivative(output);
 
 		for (int b = 0; b < batchSize; b++) {
@@ -195,6 +210,7 @@ public class Dense implements Layer {
 		}
 
 		cl_mem deltaBuffer = GPU.gpuAlloc(CL.CL_MEM_READ_ONLY, previousDelta.length, previousDelta);
+		cl_mem inputBuffer = inputs.pop();
 
 		gradient = GPU.sgemm(CLBlastTranspose.CLBlastTransposeYes, CLBlastTranspose.CLBlastTransposeNo, outputSize,
 			inputSize, batchSize, deltaBuffer, outputSize, inputBuffer, inputSize, gradient, inputSize);
@@ -207,14 +223,20 @@ public class Dense implements Layer {
 				inputSize, outputSize, deltaBuffer, outputSize, weightBuffer, inputSize, new float[batchSize * inputSize], inputSize);
 
 		CL.clReleaseMemObject(deltaBuffer);
-		CL.clReleaseMemObject(weightBuffer);
+		if (mode == Mode.GRADIENT_CHECK) {
+			CL.clReleaseMemObject(weightBuffer);
+			weightBuffer = null;
+		}
 
 		return delta;
 	}
 
-	public void update() {
-		weightUpdater.update(weights, gradient, batchSize);
-		biasUpdater.update(biases, biasGradient, batchSize);
+	public void update(int length) {
+		CL.clReleaseMemObject(weightBuffer);
+		weightBuffer = null;
+
+		weightUpdater.update(weights, gradient, length);
+		biasUpdater.update(biases, biasGradient, length);
 
 		gradient = new float[outputSize * inputSize];
 		biasGradient = new float[outputSize];

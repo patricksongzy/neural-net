@@ -8,6 +8,7 @@ import neuralnet.optimizers.UpdaterType;
 import java.io.DataInputStream;
 import java.io.DataOutputStream;
 import java.io.IOException;
+import java.util.Objects;
 
 @SuppressWarnings("FieldCanBeLocal")
 public class Residual implements Layer {
@@ -25,6 +26,8 @@ public class Residual implements Layer {
 	private Layer[] branch2;
 
 	private Residual(int filterAmount, int outputDepth, int pad, int stride, Initializer initializer) {
+		Objects.requireNonNull(initializer);
+
 		this.filterAmount = filterAmount;
 		this.outputDepth = outputDepth;
 		this.pad = pad;
@@ -200,13 +203,13 @@ public class Residual implements Layer {
 		return parameters;
 	}
 
-	public void update() {
+	public void update(int length) {
 		for (Layer layer : branch1) {
-			layer.update();
+			layer.update(length);
 		}
 
 		for (Layer layer : branch2) {
-			layer.update();
+			layer.update(length);
 		}
 	}
 

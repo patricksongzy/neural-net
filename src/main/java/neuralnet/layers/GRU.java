@@ -14,6 +14,7 @@ import java.io.DataOutputStream;
 import java.io.IOException;
 import java.util.Arrays;
 import java.util.LinkedList;
+import java.util.Objects;
 
 public class GRU implements Layer {
 	private Mode mode = Mode.TRAIN;
@@ -46,8 +47,9 @@ public class GRU implements Layer {
 
 	private GRU(int outputSize, Initializer initializer, ActivationType hiddenActivation,
 				ActivationType activation) {
-		if (initializer == null || activation == null || hiddenActivation == null)
-			throw new IllegalArgumentException("Values cannot be null.");
+		Objects.requireNonNull(initializer);
+		Objects.requireNonNull(activation);
+		Objects.requireNonNull(hiddenActivation);
 
 		this.outputSize = outputSize;
 		this.hiddenActivation = hiddenActivation;
@@ -403,14 +405,14 @@ public class GRU implements Layer {
 		return new float[][][]{{wz, dWz}, {wr, dWr}, {wh, dWh}, {bz, dBz}, {br, dBr}, {bh, dBh}};
 	}
 
-	public void update() {
-		weightUpdaters[0].update(wz, dWz, batchSize);
-		weightUpdaters[1].update(wr, dWr, batchSize);
-		weightUpdaters[2].update(wh, dWh, batchSize);
+	public void update(int length) {
+		weightUpdaters[0].update(wz, dWz, length);
+		weightUpdaters[1].update(wr, dWr, length);
+		weightUpdaters[2].update(wh, dWh, length);
 
-		biasUpdaters[0].update(bz, dBz, batchSize);
-		biasUpdaters[1].update(br, dBr, batchSize);
-		biasUpdaters[2].update(bh, dBh, batchSize);
+		biasUpdaters[0].update(bz, dBz, length);
+		biasUpdaters[1].update(br, dBr, length);
+		biasUpdaters[2].update(bh, dBh, length);
 
 		transposeWeights();
 

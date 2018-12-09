@@ -9,6 +9,7 @@ import java.io.DataInputStream;
 import java.io.DataOutputStream;
 import java.io.IOException;
 import java.util.LinkedList;
+import java.util.Objects;
 
 @SuppressWarnings("FieldCanBeLocal")
 public class PSP implements Layer {
@@ -26,6 +27,9 @@ public class PSP implements Layer {
 	private Layer[] branch4;
 
 	private PSP(LinkedList<Integer> downsampleSizes, Initializer initializer) {
+		Objects.requireNonNull(downsampleSizes);
+		Objects.requireNonNull(initializer);
+
 		this.downsampleSizes = downsampleSizes;
 		this.initializer = initializer;
 	}
@@ -225,7 +229,7 @@ public class PSP implements Layer {
 		return parameters;
 	}
 
-	public void update() {
+	public void update(int length) {
 	}
 
 	/**

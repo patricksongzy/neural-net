@@ -34,12 +34,12 @@ class PoolingTest {
 	@Test
 	void gradientCheck() {
 		Model model = new Model.Builder().add(
-			new Convolutional.Builder().filterAmount(8).filterSize(2).initializer(new HeInitialization())
+			new Convolutional.Builder().filterAmount(16).filterSize(2).initializer(new HeInitialization())
 				.pad(2).stride(2).activationType(ActivationType.RELU).build()
 		).add(
 			new Pooling.Builder().downsampleSize(2).downsampleStride(2).mode(Pooling.Mode.MAX).build()
 		).add(
-			new Convolutional.Builder().filterAmount(8).filterSize(2).initializer(new HeInitialization())
+			new Convolutional.Builder().filterAmount(16).filterSize(2).initializer(new HeInitialization())
 				.pad(1).stride(1).activationType(ActivationType.RELU).build()
 		).cost(CostType.MEAN_SQUARE_ERROR).updaterType(UpdaterType.ADAM).inputDimensions(36, 36, 3).build();
 
@@ -48,7 +48,7 @@ class PoolingTest {
 			input[i] = ThreadLocalRandom.current().nextFloat();
 		}
 
-		float[] target = new float[11 * 11 * 8];
+		float[] target = new float[11 * 11 * 16];
 		for (int i = 0; i < target.length; i++) {
 			target[i] = ThreadLocalRandom.current().nextFloat();
 		}

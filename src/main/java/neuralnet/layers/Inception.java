@@ -9,6 +9,7 @@ import java.io.DataInputStream;
 import java.io.DataOutputStream;
 import java.io.IOException;
 import java.util.LinkedList;
+import java.util.Objects;
 
 public class Inception implements Layer {
 	private int batchSize;
@@ -23,6 +24,8 @@ public class Inception implements Layer {
 	private Inception(LinkedList<Integer> filterAmounts, Initializer initializer) {
 		if (filterAmounts.size() != 6)
 			throw new IllegalArgumentException("Filter size lengths not correct");
+		Objects.requireNonNull(filterAmounts);
+		Objects.requireNonNull(initializer);
 
 		this.filterAmounts = new int[6];
 		for (int i = 0; i < filterAmounts.size(); i++) {
@@ -240,13 +243,13 @@ public class Inception implements Layer {
 		return parameters;
 	}
 
-	public void update() {
+	public void update(int length) {
 		for (Layer layer : bottleneck) {
-			layer.update();
+			layer.update(length);
 		}
 
 		for (Layer layer : conv) {
-			layer.update();
+			layer.update(length);
 		}
 	}
 

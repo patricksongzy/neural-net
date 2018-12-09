@@ -9,6 +9,7 @@ import neuralnet.optimizers.UpdaterType;
 import java.io.DataInputStream;
 import java.io.DataOutputStream;
 import java.io.IOException;
+import java.util.Objects;
 
 @SuppressWarnings("FieldCanBeLocal")
 public class BatchNormalization implements Layer {
@@ -26,6 +27,9 @@ public class BatchNormalization implements Layer {
 	private Initializer initializer;
 
 	private BatchNormalization(float epsilon, Initializer initializer, ActivationType activationType) {
+		Objects.requireNonNull(initializer);
+		Objects.requireNonNull(activationType);
+
 		this.epsilon = epsilon;
 		this.initializer = initializer;
 		this.activation = activationType;
@@ -192,7 +196,7 @@ public class BatchNormalization implements Layer {
 			{mean, new float[mean.length]}, {variance, new float[variance.length]}};
 	}
 
-	public void update() {
+	public void update(int length) {
 	}
 
 	/**

@@ -76,7 +76,7 @@ public class Dropout implements Layer {
 		return new float[0][][];
 	}
 
-	public void update() {
+	public void update(int length) {
 	}
 
 	public float[] forward(float[] input, int batchSize) {
@@ -91,7 +91,7 @@ public class Dropout implements Layer {
 					if (ThreadLocalRandom.current().nextFloat() < dropout)
 						output[i + inputSize * b] = 0;
 					else
-						output[i + inputSize * b] = input[i + inputSize * b] / dropout;
+						output[i + inputSize * b] = input[i + inputSize * b] / (1 - dropout);
 				}
 			}
 

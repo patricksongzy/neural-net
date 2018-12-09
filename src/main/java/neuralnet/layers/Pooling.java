@@ -6,6 +6,7 @@ import neuralnet.optimizers.UpdaterType;
 import java.io.DataInputStream;
 import java.io.DataOutputStream;
 import java.io.IOException;
+import java.util.Objects;
 
 /**
  * Pooling layers downsample inputs. Max pooling does so by taking a max out of a certain area from the input. To back propagation,
@@ -29,8 +30,7 @@ public class Pooling implements Layer {
 			throw new IllegalArgumentException("Invalid pooling dimensions.");
 		if (pad < 0)
 			throw new IllegalArgumentException("Invalid pad dimensions.");
-		if (mode == null)
-			throw new IllegalArgumentException("Values cannot be null.");
+		Objects.requireNonNull(mode);
 
 		this.mode = mode;
 		this.downsampleSize = downsampleSize;
@@ -235,7 +235,7 @@ public class Pooling implements Layer {
 		return new float[0][][];
 	}
 
-	public void update() {
+	public void update(int length) {
 	}
 
 	public int[] getOutputDimensions() {

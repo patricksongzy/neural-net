@@ -71,25 +71,6 @@ public class Interpolation implements Layer {
 	public float[] forward(float[] input, int batchSize) {
 		this.batchSize = batchSize;
 
-//		if (outputHeight == 473) {
-//			for (int b = 0; b < batchSize; b++) {
-//				for (int y = 0; y < height; y++) {
-//					for (int x = 0; x < width; x++) {
-//						float[] out = new float[depth];
-//						for (int k = 0; k < depth; k++) {
-//							out[k] = input[x + width * (y + height * (k + depth * b))];
-//						}
-//
-//						OutputActivationType.SOFTMAX.activation(out, 1);
-//
-//						for (int k = 0; k < depth; k++) {
-//							input[x + width * (y + height * (k + depth * b))] = out[k];
-//						}
-//					}
-//				}
-//			}
-//		}
-
 		output = new float[batchSize * depth * outputHeight * outputWidth];
 		if (height == 1 && width == 1) {
 			for (int b = 0; b < batchSize; b++) {
@@ -166,7 +147,7 @@ public class Interpolation implements Layer {
 		return new float[0][][];
 	}
 
-	public void update() {
+	public void update(int length) {
 	}
 
 	/**

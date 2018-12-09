@@ -14,6 +14,7 @@ import org.jocl.cl_mem;
 import java.io.DataInputStream;
 import java.io.DataOutputStream;
 import java.io.IOException;
+import java.util.Objects;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
@@ -54,8 +55,8 @@ public class Convolutional implements Layer {
 
 	private Convolutional(int pad, int stride, int filterAmount, int filterSize, int dilation, Initializer initializer,
 						  ActivationType activationType) {
-		if (initializer == null || activationType == null)
-			throw new IllegalArgumentException("Values cannot be null.");
+		Objects.requireNonNull(initializer);
+		Objects.requireNonNull(activationType);
 		if (pad < 0)
 			throw new IllegalArgumentException("Pad must be > 0");
 		if (stride <= 0 || filterAmount <= 0 || filterSize <= 0)
@@ -457,9 +458,9 @@ public class Convolutional implements Layer {
 		return removePad(input, batchSize, pad, depth, padWidth, inputHeight, inputWidth);
 	}
 
-	public void update() {
-		biasUpdater.update(biases, biasGradient, batchSize);
-		filterUpdater.update(filters, gradient, batchSize);
+	public void update(int length) {
+		biasUpdater.update(biases, biasGradient, length);
+		filterUpdater.update(filters, gradient, length);
 	}
 
 	public float[][][] getParameters() {
