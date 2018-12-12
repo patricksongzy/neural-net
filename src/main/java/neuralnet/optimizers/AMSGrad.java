@@ -19,15 +19,17 @@ public class AMSGrad implements Updater {
 	private static float beta2 = 0.999f;
 	private static float epsilon = 1e-8f;
 	private static float partial = 0.125f;
-	private static float decay = 0.001f;
+	private static float lambda = 0.001f;
 	private static float learningRate = 0.0001f;
 
+	private boolean decay;
 	private int t;
 	private int size;
 	private float[] m, v;
 
-	AMSGrad(int size) {
+	AMSGrad(int size, boolean decay) {
 		this.size = size;
+		this.decay = decay;
 
 		m = new float[size];
 		v = new float[size];
@@ -36,6 +38,7 @@ public class AMSGrad implements Updater {
 	AMSGrad(DataInputStream dis) throws IOException {
 		t = dis.readInt();
 		size = dis.readInt();
+		decay = dis.readBoolean();
 
 		m = new float[size];
 		v = new float[size];
@@ -72,8 +75,8 @@ public class AMSGrad implements Updater {
 		AMSGrad.learningRate = learningRate;
 	}
 
-	static void setDecay(float decay) {
-		AMSGrad.decay = decay;
+	static void setLambda(float lambda) {
+		AMSGrad.lambda = lambda;
 	}
 
 	/**
@@ -111,13 +114,17 @@ public class AMSGrad implements Updater {
 
 		IntStream.range(0, size).parallel().forEach(i -> {
 			v[i] = Math.max(v[i], v[i] * beta2 + b2 * (float) Math.pow(gradient[i] / scale, 2));
-			parameters[i] -= corrected * (m[i] / Math.pow(Math.sqrt(v[i]) + epsilon, partial * 2) + decay * parameters[i]);
+			if (decay)
+				parameters[i] -= corrected * (m[i] / Math.pow(Math.sqrt(v[i]) + epsilon, partial * 2) + lambda * parameters[i]);
+			else
+				parameters[i] -= corrected * (m[i] / Math.pow(Math.sqrt(v[i]) + epsilon, partial * 2));
 		});
 	}
 
 	public void export(DataOutputStream dos) throws IOException {
 		dos.writeInt(t);
 		dos.writeInt(size);
+		dos.writeBoolean(decay);
 
 		for (int i = 0; i < size; i++) {
 			dos.writeFloat(m[i]);

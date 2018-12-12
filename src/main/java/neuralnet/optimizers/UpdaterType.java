@@ -27,7 +27,7 @@ public enum UpdaterType {
 				break;
 			case AMSGRAD:
 			default:
-				AMSGrad.setDecay(decay);
+				AMSGrad.setLambda(decay);
 		}
 	}
 
@@ -64,13 +64,13 @@ public enum UpdaterType {
 	 *
 	 * @return an instance of the current UpdaterType
 	 */
-	public Updater create(int size) {
+	public Updater create(int size, boolean decay) {
 		switch (this) {
 			case ADAM:
 				return new Adam(size);
 			case AMSGRAD:
 			default:
-				return new AMSGrad(size);
+				return new AMSGrad(size, decay);
 		}
 	}
 

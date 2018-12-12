@@ -23,6 +23,7 @@ class GPUTest {
 		float[] a = new float[]{1, 2, 3, 4, 5};
 		float[] b = new float[]{5, 4, 3, 2, 1};
 
+		GPU.init(0, 0);
 		assertArrayEquals(new float[]{5.5f, 5, 4.5f, 4, 3.5f}, GPU.saxpy(n, 0.5f, a, GPU.gpuAlloc(CL.CL_MEM_READ_ONLY, n, b)));
 	}
 }

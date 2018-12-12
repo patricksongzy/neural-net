@@ -130,8 +130,8 @@ public class GRU implements Layer {
 		weightUpdaters = new Updater[3];
 		biasUpdaters = new Updater[3];
 		for (int i = 0; i < 3; i++) {
-			weightUpdaters[i] = updaterType.create(outputSize * inputSize + outputSize * outputSize);
-			biasUpdaters[i] = updaterType.create(outputSize);
+			weightUpdaters[i] = updaterType.create(outputSize * inputSize + outputSize * outputSize, true);
+			biasUpdaters[i] = updaterType.create(outputSize, false);
 		}
 
 		for (int i = 0; i < outputSize * inputSize; i++) {

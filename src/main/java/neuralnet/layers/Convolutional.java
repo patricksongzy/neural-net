@@ -247,10 +247,10 @@ public class Convolutional implements Layer {
 		System.out.println("Activation: " + activation.getType());
 
 		filters = new float[filterAmount * depth * filterSize * filterSize];
-		filterUpdater = updaterType.create(filters.length);
+		filterUpdater = updaterType.create(filters.length, true);
 
 		biases = new float[filterAmount];
-		biasUpdater = updaterType.create(biases.length);
+		biasUpdater = updaterType.create(biases.length, false);
 
 		int inputSize = depth * filterSize * filterSize;
 

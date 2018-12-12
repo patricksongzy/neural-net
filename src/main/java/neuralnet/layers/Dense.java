@@ -120,10 +120,10 @@ public class Dense implements Layer {
 			throw new IllegalArgumentException("Temperature must be > 0.");
 
 		weights = new float[outputSize * inputSize];
-		weightUpdater = updaterType.create(weights.length);
+		weightUpdater = updaterType.create(weights.length, true);
 
 		biases = new float[outputSize];
-		biasUpdater = updaterType.create(biases.length);
+		biasUpdater = updaterType.create(biases.length, false);
 
 		gradient = new float[outputSize * inputSize];
 		biasGradient = new float[outputSize];
