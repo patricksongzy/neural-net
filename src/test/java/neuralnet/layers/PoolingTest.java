@@ -17,7 +17,7 @@ class PoolingTest {
 	@Test
 	void forward() {
 		Pooling pooling = new Pooling.Builder().downsampleSize(2).downsampleStride(2).build();
-		pooling.setDimensions(new int[]{4, 4, 1}, null);
+		pooling.setDimensions(new int[]{1, 4, 4}, null);
 		float[] input = new float[]{1, 1, 2, 4, 5, 6, 7, 8, 3, 2, 1, 0, 1, 2, 3, 4};
 		System.out.println(Arrays.toString(pooling.forward(input, 1)));
 		assertArrayEquals(new float[]{6, 8, 3, 4}, pooling.forward(input, 1));
@@ -26,7 +26,7 @@ class PoolingTest {
 	@Test
 	void backward() {
 		Pooling pooling = new Pooling.Builder().downsampleSize(2).downsampleStride(2).build();
-		pooling.setDimensions(new int[]{4, 4, 1}, null);
+		pooling.setDimensions(new int[]{1, 4, 4}, null);
 		pooling.forward(new float[]{1, 1, 2, 4, 5, 6, 7, 8, 3, 2, 1, 0, 1, 2, 3, 4}, 1);
 		assertArrayEquals(new float[]{0, 0, 0, 0, 0, 1, 0, 2, 3, 0, 0, 0, 0, 0, 0, 4}, pooling.backward(new float[]{1, 2, 3, 4}, true));
 	}
@@ -41,7 +41,7 @@ class PoolingTest {
 		).add(
 			new Convolutional.Builder().filterAmount(16).filterSize(2).initializer(new HeInitialization())
 				.pad(1).stride(1).activationType(ActivationType.RELU).build()
-		).cost(CostType.MEAN_SQUARE_ERROR).updaterType(UpdaterType.ADAM).inputDimensions(36, 36, 3).build();
+		).cost(CostType.MEAN_SQUARE_ERROR).updaterType(UpdaterType.ADAM).inputDimensions(3, 36, 36).build();
 
 		float[] input = new float[36 * 36 * 3];
 		for (int i = 0; i < input.length; i++) {

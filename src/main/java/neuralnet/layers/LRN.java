@@ -6,12 +6,13 @@ import neuralnet.optimizers.UpdaterType;
 import java.io.DataInputStream;
 import java.io.DataOutputStream;
 import java.io.IOException;
+import java.util.stream.IntStream;
 
 public class LRN implements Layer {
 	private int batchSize;
 	private int n;
 	private float k, alpha, beta;
-	private int height, width, depth;
+	private int depth, height, width;
 	private float[] output;
 
 	private LRN(int n, float k, float alpha, float beta) {
@@ -22,9 +23,9 @@ public class LRN implements Layer {
 	}
 
 	LRN(DataInputStream dis) throws IOException {
+		depth = dis.readInt();
 		height = dis.readInt();
 		width = dis.readInt();
-		depth = dis.readInt();
 
 		n = dis.readInt();
 		k = dis.readFloat();
@@ -36,9 +37,9 @@ public class LRN implements Layer {
 		if (dimensions.length < 3)
 			throw new IllegalArgumentException();
 
-		this.height = dimensions[0];
-		this.width = dimensions[1];
-		this.depth = dimensions[2];
+		this.depth = dimensions[0];
+		this.height = dimensions[1];
+		this.width = dimensions[2];
 	}
 
 	public void setMode(Layer.Mode mode) {
@@ -52,7 +53,7 @@ public class LRN implements Layer {
 		this.batchSize = batchSize;
 		output = new float[input.length];
 
-		for (int b = 0; b < batchSize; b++) {
+		IntStream.range(0, batchSize).parallel().forEach(b -> {
 			for (int h = 0; h < height; h++) {
 				for (int w = 0; w < width; w++) {
 					for (int d = 0; d < depth; d++) {
@@ -67,7 +68,7 @@ public class LRN implements Layer {
 					}
 				}
 			}
-		}
+		});
 
 		return output;
 	}
@@ -79,11 +80,11 @@ public class LRN implements Layer {
 
 	// TODO: implement
 	public float[] backward(float[] previousDelta, boolean calculateDelta) {
-		return new float[batchSize * height * width * depth];
+		return new float[batchSize * depth * height * width];
 	}
 
 	public int[] getOutputDimensions() {
-		return new int[]{height, width, depth};
+		return new int[]{depth, height, width};
 	}
 
 	public float[][][] getParameters() {
@@ -94,9 +95,9 @@ public class LRN implements Layer {
 	}
 
 	public void export(DataOutputStream dos) throws IOException {
+		dos.writeInt(depth);
 		dos.writeInt(height);
 		dos.writeInt(width);
-		dos.writeInt(depth);
 
 		dos.writeInt(n);
 		dos.writeFloat(k);

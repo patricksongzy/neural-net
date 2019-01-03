@@ -29,5 +29,13 @@ public interface Cost {
 	 */
 	float[] derivative(float[] output, float[] targets, int batchSize);
 
+	/**
+	 * This method calculates the derivative of cost with the softmax function.
+	 *
+	 * @param output    the neural network output
+	 * @param targets   the targets
+	 * @param batchSize the batch size
+	 * @return the derivative of cost with respect to the input to the softmax function
+	 */
 	float[] derviativeSoftmax(float[] output, float[] targets, int batchSize);
 }

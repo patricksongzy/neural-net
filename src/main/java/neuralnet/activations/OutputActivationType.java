@@ -16,6 +16,7 @@ public enum OutputActivationType implements Activation {
 			IntStream.range(0, batchSize).parallel().forEach(b -> {
 				max[b] = Float.NEGATIVE_INFINITY;
 
+				// max value is to avoid NaNs
 				for (int i = 0; i < size; i++) {
 					int index = i + size * b;
 
@@ -23,6 +24,7 @@ public enum OutputActivationType implements Activation {
 						max[b] = x[index];
 				}
 
+				// calculate sums
 				for (int i = 0; i < size; i++) {
 					int index = i + size * b;
 
@@ -39,6 +41,7 @@ public enum OutputActivationType implements Activation {
 		}
 
 		public float[] derivative(float[] x) {
+			// this is implemented in cost functions
 			return x;
 		}
 	}

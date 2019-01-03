@@ -7,6 +7,7 @@ import java.io.DataInputStream;
 import java.io.DataOutputStream;
 import java.io.IOException;
 import java.util.Objects;
+import java.util.stream.IntStream;
 
 /**
  * Pooling layers downsample inputs. Max pooling does so by taking a max out of a certain area from the input. To back propagation,
@@ -39,39 +40,31 @@ public class Pooling implements Layer {
 	}
 
 	Pooling(DataInputStream dis) throws IOException {
-		System.out.println("Type: " + getType());
 		mode = Mode.valueOf(dis.readUTF());
+		depth = dis.readInt();
 		inputHeight = dis.readInt();
 		inputWidth = dis.readInt();
 		pad = dis.readInt();
 		padHeight = dis.readInt();
 		padWidth = dis.readInt();
-		depth = dis.readInt();
-		System.out.println(String.format("Input Dimensions (h x w x d): %d x %d x %d", inputHeight, inputWidth, depth));
-		System.out.println(String.format("Input Dimensions (h x w x d): %d x %d x %d", padHeight, padWidth, depth));
 
 		downsampleHeight = dis.readInt();
 		downsampleWidth = dis.readInt();
-		System.out.println(String.format("Output Dimensions (h x w x d): %d x %d x %d", downsampleHeight, downsampleWidth, depth));
 
 		downsampleSize = dis.readInt();
 		downsampleStride = dis.readInt();
-		System.out.println("Downsample Size: " + downsampleSize);
-		System.out.println("Downsample Stride: " + downsampleStride);
 	}
 
 	public void setMode(Layer.Mode mode) {
 	}
 
 	public void setDimensions(int[] dimensions, UpdaterType updaterType) {
-		System.out.println("Type: " + getType());
-
 		if (dimensions.length < 3)
 			throw new IllegalArgumentException("Invalid input dimensions.");
 
-		this.inputHeight = dimensions[0];
-		this.inputWidth = dimensions[1];
-		this.depth = dimensions[2];
+		this.depth = dimensions[0];
+		this.inputHeight = dimensions[1];
+		this.inputWidth = dimensions[2];
 
 		padHeight = inputHeight + 2 * pad;
 		padWidth = inputWidth + 2 * pad;
@@ -83,10 +76,6 @@ public class Pooling implements Layer {
 			downsampleHeight--;
 		if ((downsampleWidth - 1) * downsampleStride >= inputWidth * padWidth)
 			downsampleWidth--;
-
-		System.out.println(String.format("Input Dimensions (h x w x d): %d x %d x %d", inputHeight, inputWidth, depth));
-		System.out.println(String.format("Pad Dimensions (h x w x d): %d x %d x %d", padHeight, padWidth, depth));
-		System.out.println(String.format("Output Dimensions (h x w x d): %d x %d x %d", downsampleHeight, downsampleWidth, depth));
 
 		if ((padHeight - downsampleSize) % downsampleStride != 0 || (padWidth - downsampleSize) % downsampleStride != 0) {
 			System.err.println("WARNING: Stride and filter sizes do not match");
@@ -127,7 +116,7 @@ public class Pooling implements Layer {
 		int roundWidth = (padWidth - downsampleSize) % downsampleStride != 0 ? 1 : 0;
 		int roundHeight = (padHeight - downsampleSize) % downsampleStride != 0 ? 1 : 0;
 
-		for (int b = 0; b < batchSize; b++) {
+		IntStream.range(0, batchSize).parallel().forEach(b -> {
 			for (int f = 0; f < depth; f++) {
 				for (int i = -roundHeight; i < downsampleHeight - roundHeight; i++) {
 					for (int j = -roundWidth; j < downsampleWidth - roundWidth; j++) {
@@ -172,7 +161,7 @@ public class Pooling implements Layer {
 					}
 				}
 			}
-		}
+		});
 
 		return output;
 	}
@@ -188,12 +177,12 @@ public class Pooling implements Layer {
 			int roundWidth = (padWidth - downsampleSize) % downsampleStride != 0 ? 1 : 0;
 			int roundHeight = (padHeight - downsampleSize) % downsampleStride != 0 ? 1 : 0;
 
-			for (int b = 0; b < batchSize; b++) {
+			IntStream.range(0, batchSize).parallel().forEach(b -> {
 				for (int f = 0; f < depth; f++) {
 					for (int i = -roundHeight, h = 0; i < downsampleHeight - roundHeight; i++, h += downsampleStride) {
 						for (int j = -roundWidth, w = 0; j < downsampleWidth - roundWidth; j++, w += downsampleStride) {
-							int downsampleIndex =
-								(j + roundWidth) + downsampleWidth * ((i + roundHeight) + downsampleHeight * (f + depth * b));
+							int downsampleIndex = (j + roundWidth) + downsampleWidth * ((i + roundHeight) +
+								downsampleHeight * (f + depth * b));
 
 							if (mode == Mode.MAX) {
 								for (int m = 0; m < downsampleSize; m++) {
@@ -216,7 +205,7 @@ public class Pooling implements Layer {
 						}
 					}
 				}
-			}
+			});
 
 			return removePad(upsampled, batchSize);
 		}
@@ -239,17 +228,17 @@ public class Pooling implements Layer {
 	}
 
 	public int[] getOutputDimensions() {
-		return new int[]{downsampleHeight, downsampleWidth, depth};
+		return new int[]{depth, downsampleHeight, downsampleWidth};
 	}
 
 	public void export(DataOutputStream dos) throws IOException {
 		dos.writeUTF(mode.toString());
+		dos.writeInt(depth);
 		dos.writeInt(inputHeight);
 		dos.writeInt(inputWidth);
 		dos.writeInt(pad);
 		dos.writeInt(padHeight);
 		dos.writeInt(padWidth);
-		dos.writeInt(depth);
 		dos.writeInt(downsampleHeight);
 		dos.writeInt(downsampleWidth);
 		dos.writeInt(downsampleSize);

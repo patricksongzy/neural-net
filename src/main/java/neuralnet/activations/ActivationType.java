@@ -12,6 +12,7 @@ public enum ActivationType implements Activation {
 			if (batchSize <= 0)
 				throw new IllegalArgumentException("Batch size must be > 0");
 
+			// max function
 			IntStream.range(0, x.length).parallel().forEach(i -> {
 				// same as max of 0 and x
 				if (x[i] < 0)
@@ -22,6 +23,7 @@ public enum ActivationType implements Activation {
 		public float[] derivative(float[] x) {
 			float[] derivative = new float[x.length];
 
+			// derivative of a lines y = 0 and y = x
 			IntStream.range(0, x.length).parallel().forEach(i -> derivative[i] = x[i] > 0 ? 1 : 0);
 
 			return derivative;
@@ -37,6 +39,7 @@ public enum ActivationType implements Activation {
 		public float[] derivative(float[] x) {
 			float[] derivative = new float[x.length];
 
+			// derivative of the line y = x
 			IntStream.range(0, x.length).parallel().forEach(b -> derivative[b] = 1);
 
 			return derivative;
@@ -56,6 +59,7 @@ public enum ActivationType implements Activation {
 		public float[] derivative(float[] x) {
 			float[] derivative = new float[x.length];
 
+			// derivative of tanh
 			IntStream.range(0, x.length).parallel().forEach(i -> derivative[i] = 1 - (float) Math.pow(x[i], 2));
 
 			return derivative;
@@ -75,6 +79,7 @@ public enum ActivationType implements Activation {
 		public float[] derivative(float[] x) {
 			float[] derivative = new float[x.length];
 
+			// sigmoid derivative
 			IntStream.range(0, x.length).parallel().forEach(i -> derivative[i] = x[i] * (1 - x[i]));
 
 			return derivative;

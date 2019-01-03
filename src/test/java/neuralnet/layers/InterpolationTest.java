@@ -6,7 +6,7 @@ class InterpolationTest {
 	@Test
 	void forward() {
 		Interpolation interpolation = new Interpolation.Builder().outputHeight(10).outputWidth(10).build();
-		interpolation.setDimensions(new int[]{2, 2, 1}, null);
+		interpolation.setDimensions(new int[]{1, 2, 2}, null);
 
 		float[] output = interpolation.forward(new float[]{5, 1, 1, 5}, 1);
 		for (int i = 0; i < 10; i++) {

@@ -25,40 +25,32 @@ public class Interpolation implements Layer {
 	}
 
 	Interpolation(DataInputStream dis) throws IOException {
+		depth = dis.readInt();
 		height = dis.readInt();
 		width = dis.readInt();
-		depth = dis.readInt();
-
-		System.out.println(String.format("Input Dimensions (h x w x d): %d x %d x %d", height, width, depth));
 
 		outputHeight = dis.readInt();
 		outputWidth = dis.readInt();
-
-		System.out.println(String.format("Output Size (h x w x d): %d x %d x %d", outputHeight, outputWidth, depth));
 	}
 
 	public void export(DataOutputStream dos) throws IOException {
+		dos.writeInt(depth);
 		dos.writeInt(height);
 		dos.writeInt(width);
-		dos.writeInt(depth);
 
 		dos.writeInt(outputHeight);
 		dos.writeInt(outputWidth);
 	}
 
 	public void setDimensions(int dimensions[], UpdaterType updaterType) {
-		this.height = dimensions[0];
-		this.width = dimensions[1];
-		this.depth = dimensions[2];
-
-		System.out.println(String.format("Input Dimensions (h x w x d): %d x %d x %d", height, width, depth));
+		this.depth = dimensions[0];
+		this.height = dimensions[1];
+		this.width = dimensions[2];
 
 		if (zoomFactor > 0) {
 			outputHeight = height + (height - 1) * (zoomFactor - 1);
 			outputWidth = width + (width - 1) * (zoomFactor - 1);
 		}
-
-		System.out.println(String.format("Output Size (h x w x d): %d x %d x %d", outputHeight, outputWidth, depth));
 	}
 
 	public void setMode(Mode mode) {
@@ -132,15 +124,15 @@ public class Interpolation implements Layer {
 	}
 
 	public float[] backward(Cost cost, float[] target, boolean calculateDelta) {
-		return new float[height * width * depth * batchSize];
+		return new float[batchSize * depth * height * width];
 	}
 
 	public float[] backward(float[] previousDelta, boolean calculateDelta) {
-		return new float[height * width * depth * batchSize];
+		return new float[batchSize * depth * height * width];
 	}
 
 	public int[] getOutputDimensions() {
-		return new int[]{outputHeight, outputWidth, depth};
+		return new int[]{depth, outputHeight, outputWidth};
 	}
 
 	public float[][][] getParameters() {

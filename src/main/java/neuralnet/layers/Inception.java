@@ -13,7 +13,7 @@ import java.util.Objects;
 
 public class Inception implements Layer {
 	private int batchSize;
-	private int height, width, depth;
+	private int depth, height, width;
 	private int[] filterAmounts;
 
 	private float[] output;
@@ -53,9 +53,9 @@ public class Inception implements Layer {
 	}
 
 	Inception(DataInputStream dis, UpdaterType updaterType) throws IOException {
+		depth = dis.readInt();
 		height = dis.readInt();
 		width = dis.readInt();
-		depth = dis.readInt();
 
 		filterAmounts = new int[dis.readInt()];
 		for (int i = 0; i < filterAmounts.length; i++) {
@@ -74,9 +74,9 @@ public class Inception implements Layer {
 	}
 
 	public void export(DataOutputStream dos) throws IOException {
+		dos.writeInt(depth);
 		dos.writeInt(height);
 		dos.writeInt(width);
-		dos.writeInt(depth);
 
 		dos.writeInt(filterAmounts.length);
 		for (int filterAmount : filterAmounts) {
@@ -100,9 +100,9 @@ public class Inception implements Layer {
 		if (dimensions.length != 3)
 			throw new IllegalArgumentException("Invalid input dimensions.");
 
-		this.height = dimensions[0];
-		this.width = dimensions[1];
-		this.depth = dimensions[2];
+		this.depth = dimensions[0];
+		this.height = dimensions[1];
+		this.width = dimensions[2];
 
 		for (Layer layer : bottleneck) {
 			layer.setDimensions(dimensions, updaterType);
@@ -140,7 +140,7 @@ public class Inception implements Layer {
 			outputs[i + 1] = conv[i].forward(outputs[i + 1], batchSize);
 		}
 
-		int outputDepth = getOutputDimensions()[2];
+		int outputDepth = getOutputDimensions()[0];
 		output = new float[height * width * outputDepth * batchSize];
 		int offset = 0;
 		for (int i = 0; i < bottleneck.length; i++) {
@@ -168,7 +168,7 @@ public class Inception implements Layer {
 	public float[] backward(float[] previousDelta, boolean calculateDelta) {
 		float[][] deltas = new float[bottleneck.length][];
 
-		int outputDepth = getOutputDimensions()[2];
+		int outputDepth = getOutputDimensions()[0];
 		int offset = 0;
 
 		for (int i = 0; i < bottleneck.length; i++) {
@@ -195,7 +195,7 @@ public class Inception implements Layer {
 			deltas[i] = bottleneck[i].backward(deltas[i], calculateDelta);
 		}
 
-		float[] delta = new float[batchSize * height * width * depth];
+		float[] delta = new float[batchSize * depth * height * width];
 
 		for (int i = 0; i < bottleneck.length; i++) {
 			for (int b = 0; b < batchSize; b++) {
@@ -213,7 +213,7 @@ public class Inception implements Layer {
 	}
 
 	public int[] getOutputDimensions() {
-		return new int[]{height, width, (filterAmounts[0] + filterAmounts[3] + filterAmounts[4] + filterAmounts[5])};
+		return new int[]{(filterAmounts[0] + filterAmounts[3] + filterAmounts[4] + filterAmounts[5]), height, width};
 	}
 
 	public float[][][] getParameters() {

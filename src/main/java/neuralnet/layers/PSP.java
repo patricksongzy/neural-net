@@ -14,7 +14,7 @@ import java.util.Objects;
 @SuppressWarnings("FieldCanBeLocal")
 public class PSP implements Layer {
 	private int batchSize;
-	private int height, width, depth;
+	private int depth, height, width;
 
 	private LinkedList<Integer> downsampleSizes;
 	private Initializer initializer;
@@ -35,9 +35,9 @@ public class PSP implements Layer {
 	}
 
 	PSP(DataInputStream dis, UpdaterType updaterType) throws IOException {
+		depth = dis.readInt();
 		height = dis.readInt();
 		width = dis.readInt();
-		depth = dis.readInt();
 
 		branch1 = new Layer[4];
 		branch2 = new Layer[4];
@@ -52,9 +52,9 @@ public class PSP implements Layer {
 	}
 
 	public void export(DataOutputStream dos) throws IOException {
+		dos.writeInt(depth);
 		dos.writeInt(height);
 		dos.writeInt(width);
-		dos.writeInt(depth);
 
 		for (int i = 0; i < 4; i++) {
 			dos.writeUTF(branch1[i].getType().toString());
@@ -72,9 +72,9 @@ public class PSP implements Layer {
 		if (dimensions.length != 3)
 			throw new IllegalArgumentException("Invalid input dimensions.");
 
-		this.height = dimensions[0];
-		this.width = dimensions[1];
-		this.depth = dimensions[2];
+		this.depth = dimensions[0];
+		this.height = dimensions[1];
+		this.width = dimensions[2];
 
 		branch1 = new Layer[]{
 			new Pooling.Builder().downsampleSize(downsampleSizes.getFirst()).downsampleStride(downsampleSizes.remove()).mode(Pooling.Mode.AVERAGE).build(),
@@ -151,7 +151,7 @@ public class PSP implements Layer {
 			outputs[3] = branch4[i].forward(outputs[3], batchSize);
 		}
 
-		int outputDepth = getOutputDimensions()[2];
+		int outputDepth = getOutputDimensions()[0];
 		int offset = 0;
 
 		output = new float[height * width * outputDepth * batchSize];
@@ -183,15 +183,15 @@ public class PSP implements Layer {
 	}
 
 	public float[] backward(Cost cost, float[] target, boolean calculateDelta) {
-		return new float[height * width * depth * batchSize];
+		return new float[batchSize * depth * height * width];
 	}
 
 	public float[] backward(float[] previousDelta, boolean calculateDelta) {
-		return new float[height * width * depth * batchSize];
+		return new float[batchSize * depth * height * width];
 	}
 
 	public int[] getOutputDimensions() {
-		return new int[]{height, width, 2048 + depth};
+		return new int[]{2048 + depth, height, width};
 	}
 
 	public float[][][] getParameters() {

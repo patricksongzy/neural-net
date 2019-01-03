@@ -43,20 +43,11 @@ public class Dense implements Layer {
 	 * @param dis the input stream
 	 */
 	Dense(DataInputStream dis, UpdaterType updaterType) throws IOException {
-		System.out.println("Type: " + getType());
-
 		inputSize = dis.readInt();
 		outputSize = dis.readInt();
 		temperature = dis.readFloat();
-
-		System.out.println("Input Size: " + inputSize);
-		System.out.println("Output Size: " + outputSize);
-		System.out.println("Temperature: " + temperature);
-
 		activation = Activation.fromString(dis);
-		System.out.println("Activation: " + activation.getType());
 
-		System.out.println("Importing weights.");
 		weights = new float[outputSize * inputSize];
 		weightUpdater = updaterType.create(dis);
 
@@ -75,8 +66,6 @@ public class Dense implements Layer {
 				weights[index] = dis.readFloat();
 			}
 		}
-
-		System.out.println("Done importing weights.");
 	}
 
 	private Dense(int outputSize, float temperature, Initializer initializer, Activation activation) {
@@ -102,15 +91,9 @@ public class Dense implements Layer {
 	}
 
 	public void setDimensions(int[] dimensions, UpdaterType updaterType) {
-		System.out.println("Type: " + getType());
-
 		inputSize = dimensions[0];
 		for (int i = 1; i < dimensions.length; i++)
 			inputSize *= dimensions[i];
-
-		System.out.println("Input Size: " + inputSize);
-		System.out.println("Output Size: " + outputSize);
-		System.out.println("Temperature: " + temperature);
 
 		if (inputSize <= 0)
 			throw new IllegalArgumentException("Invalid input dimensions.");

@@ -15,7 +15,7 @@ public class Residual implements Layer {
 	private int batchSize;
 	private int pad;
 	private int stride;
-	private int height, width, depth;
+	private int depth, height, width;
 	private int filterAmount;
 	private int outputDepth;
 
@@ -36,9 +36,9 @@ public class Residual implements Layer {
 	}
 
 	Residual(DataInputStream dis, UpdaterType updaterType) throws IOException {
+		depth = dis.readInt();
 		height = dis.readInt();
 		width = dis.readInt();
-		depth = dis.readInt();
 
 		filterAmount = dis.readInt();
 		outputDepth = dis.readInt();
@@ -55,9 +55,9 @@ public class Residual implements Layer {
 	}
 
 	public void export(DataOutputStream dos) throws IOException {
+		dos.writeInt(depth);
 		dos.writeInt(height);
 		dos.writeInt(width);
-		dos.writeInt(depth);
 
 		dos.writeInt(filterAmount);
 		dos.writeInt(outputDepth);
@@ -79,9 +79,9 @@ public class Residual implements Layer {
 		if (dimensions.length != 3)
 			throw new IllegalArgumentException("Invalid input dimensions.");
 
-		this.height = dimensions[0];
-		this.width = dimensions[1];
-		this.depth = dimensions[2];
+		this.depth = dimensions[0];
+		this.height = dimensions[1];
+		this.width = dimensions[2];
 
 		if (outputDepth == -1) {
 			outputDepth = depth;
@@ -158,12 +158,12 @@ public class Residual implements Layer {
 
 	// TODO: implement
 	public float[] backward(Cost cost, float[] target, boolean calculateDelta) {
-		return new float[height * width * depth * batchSize];
+		return new float[batchSize * depth * height * width];
 	}
 
 	// TODO: implement
 	public float[] backward(float[] previousDelta, boolean calculateDelta) {
-		return new float[height * width * depth * batchSize];
+		return new float[batchSize * depth * height * width];
 	}
 
 	public int[] getOutputDimensions() {

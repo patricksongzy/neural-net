@@ -10,6 +10,7 @@ import java.io.DataInputStream;
 import java.io.DataOutputStream;
 import java.io.IOException;
 import java.util.Objects;
+import java.util.stream.IntStream;
 
 @SuppressWarnings("FieldCanBeLocal")
 public class BatchNormalization implements Layer {
@@ -59,9 +60,9 @@ public class BatchNormalization implements Layer {
 	}
 
 	public void export(DataOutputStream dos) throws IOException {
+		dos.writeInt(depth);
 		dos.writeInt(height);
 		dos.writeInt(width);
-		dos.writeInt(depth);
 		dos.writeFloat(epsilon);
 
 		for (int i = 0; i < depth; i++) {
@@ -79,9 +80,9 @@ public class BatchNormalization implements Layer {
 
 	public void setDimensions(int[] dimensions, UpdaterType updaterType) {
 		if (dimensions.length == 3) {
-			this.height = dimensions[0];
-			this.width = dimensions[1];
-			this.depth = dimensions[2];
+			this.depth = dimensions[0];
+			this.height = dimensions[1];
+			this.width = dimensions[2];
 		} else {
 			height = 1;
 			width = 1;
@@ -97,7 +98,7 @@ public class BatchNormalization implements Layer {
 		weights = new float[depth];
 		biases = new float[depth];
 
-		int inputSize = height * width * depth;
+		int inputSize = depth * height * width;
 		for (int i = 0; i < depth; i++) {
 			weights[i] = initializer.initialize(inputSize);
 			biases[i] = initializer.initialize(inputSize);
@@ -154,7 +155,7 @@ public class BatchNormalization implements Layer {
 		} else {
 			output = new float[batchSize * input.length];
 
-			for (int b = 0; b < batchSize; b++) {
+			IntStream.range(0, batchSize).parallel().forEach(b -> {
 				for (int i = 0; i < depth; i++) {
 					for (int j = 0; j < height * width; j++) {
 						int index = j + (height * width) * (i + depth * b);
@@ -162,17 +163,17 @@ public class BatchNormalization implements Layer {
 						output[index] += (input[index] - mean[i]) / Math.sqrt(variance[i] + epsilon);
 					}
 				}
-			}
+			});
 		}
 
-		for (int b = 0; b < batchSize; b++) {
+		IntStream.range(0, batchSize).parallel().forEach(b -> {
 			for (int i = 0; i < depth; i++) {
 				for (int j = 0; j < height * width; j++) {
 					int index = j + (height * width) * (i + depth * b);
 					output[index] = input[index] * weights[i] + biases[i];
 				}
 			}
-		}
+		});
 
 		activation.activation(output, batchSize);
 
@@ -180,15 +181,15 @@ public class BatchNormalization implements Layer {
 	}
 
 	public float[] backward(Cost cost, float[] target, boolean calculateDelta) {
-		return new float[height * width * depth * batchSize];
+		return new float[batchSize * depth * height * width];
 	}
 
 	public float[] backward(float[] previousDelta, boolean calculateDelta) {
-		return new float[height * width * depth * batchSize];
+		return new float[batchSize * depth * height * width];
 	}
 
 	public int[] getOutputDimensions() {
-		return new int[]{height, width, depth};
+		return new int[]{depth, height, width};
 	}
 
 	public float[][][] getParameters() {

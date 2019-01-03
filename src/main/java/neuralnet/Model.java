@@ -72,8 +72,32 @@ public class Model {
 	 */
 	public Model(String file) {
 		try (DataInputStream dis = new DataInputStream(new BufferedInputStream(new FileInputStream(file), 16384))) {
-			System.out.println("Importing from: " + file);
+			// importing layers
+			int layerAmount = dis.readInt();
+			inputSize = dis.readInt();
 
+			updaterType = UpdaterType.fromString(dis);
+
+			layers = new Layer[layerAmount];
+			for (int i = 0; i < layerAmount; i++)
+				layers[i] = LayerType.fromString(dis, updaterType);
+
+			cost = CostType.fromString(dis);
+
+			System.out.println("Imported from: " + file);
+		} catch (IOException e) {
+			e.printStackTrace();
+			System.exit(0);
+		}
+	}
+
+	/**
+	 * Imports a model from an input stream.
+	 *
+	 * @param is the input stream
+	 */
+	public Model(InputStream is) {
+		try (DataInputStream dis = new DataInputStream(new BufferedInputStream(is, 16384))) {
 			// importing layers
 			int layerAmount = dis.readInt();
 			inputSize = dis.readInt();
@@ -82,14 +106,10 @@ public class Model {
 
 			layers = new Layer[layerAmount];
 			for (int i = 0; i < layerAmount; i++) {
-				System.out.println("Importing layer " + (i + 1) + " / " + layerAmount);
 				layers[i] = LayerType.fromString(dis, updaterType);
-				System.out.println("Done importing layer " + (i + 1) + " / " + layerAmount);
 			}
 
 			cost = CostType.fromString(dis);
-
-			System.out.println("Done importing from: " + file);
 		} catch (IOException e) {
 			e.printStackTrace();
 			System.exit(0);
@@ -155,14 +175,13 @@ public class Model {
 	}
 
 	public void train(Map<float[], Float> data, int batchSize, int epochs, float max, float min, float decay, int restartInterval,
-					  int restartMultiplier, int checkpoint, String name) {
+					  int restartMultiplier, int warmup, int checkpoint, String name) {
 		new Thread(() -> Application.launch(Plot.class, (String) null)).start();
 
 		// setting mode to training mode
 		setMode(Layer.Mode.TRAIN);
 
 		List<float[]> keys = new ArrayList<>(data.keySet());
-		updaterType.setDecay(decay * (float) Math.sqrt((float) batchSize / (keys.size() * restartInterval)));
 
 		int inputSize = keys.get(0).length;
 
@@ -181,7 +200,9 @@ public class Model {
 			System.out.println("Epoch: " + i + "/" + epochs);
 			// looping through the training set
 			for (int j = 0; j < keys.size(); j += batchSize, batch++) {
-				if ((current / keys.size()) == restartInterval) {
+				if (i <= warmup) {
+					updaterType.init((max / warmup) * (current / keys.size()));
+				} else if ((current / keys.size()) == restartInterval) {
 					System.out.println("Restarting");
 
 					current = 0;
@@ -231,6 +252,9 @@ public class Model {
 			}
 
 			System.out.println();
+
+			if (i == warmup)
+				current = 0;
 		}
 	}
 
@@ -303,6 +327,7 @@ public class Model {
 					group.put(inputs, targets);
 				}
 
+				// TODO: data is not fully shuffled
 				if (j + s == keys.size()) {
 					List<float[][]> inputs = new ArrayList<>(group.keySet());
 					Collections.shuffle(inputs);
@@ -666,7 +691,7 @@ public class Model {
 		}
 
 		/**
-		 * Sets the input dimensions.
+		 * Sets the input dimensions with the following order: depth, width, height. Any matrices are in row major format.
 		 *
 		 * @param inputDimensions the input dimensions
 		 */

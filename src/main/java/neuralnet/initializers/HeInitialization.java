@@ -14,6 +14,7 @@ public class HeInitialization implements Initializer {
 	}
 
 	private static double truncatedNormal(double stddev) {
+		// weights must be within 2 standard deviations to prevent bad initializations
 		double random;
 		do {
 			random = ThreadLocalRandom.current().nextGaussian() * stddev;

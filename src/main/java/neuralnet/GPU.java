@@ -16,9 +16,16 @@ public class GPU {
 		CL.setExceptionsEnabled(true);
 		CLBlast.setExceptionsEnabled(true);
 
+		// initialize using first GPU
 		init(0, 0);
 	}
 
+	/**
+	 * Initialize with certain GPU.
+	 *
+	 * @param platformIndex the platform index
+	 * @param deviceIndex   the device index
+	 */
 	@SuppressWarnings("unused, WeakerAccess")
 	public static void init(int platformIndex, int deviceIndex) {
 		if (commandQueue != null)
@@ -77,26 +84,22 @@ public class GPU {
 		Runtime.getRuntime().addShutdownHook(shutdownHook);
 	}
 
-	private static void getPlatformName(cl_platform_id platform) {
-		long size[] = new long[1];
-		clGetPlatformInfo(platform, CL.CL_PLATFORM_NAME, 0, null, size);
-		byte buffer[] = new byte[(int) size[0]];
-		clGetPlatformInfo(platform, CL.CL_PLATFORM_NAME, buffer.length, Pointer.to(buffer), null);
-
-		// Create a string from the buffer (excluding the trailing \0 byte)
-		System.out.println("platform: " + new String(buffer, 0, buffer.length - 1));
-	}
-
-	private static void getDeviceName(cl_device_id device) {
-		long size[] = new long[1];
-		clGetDeviceInfo(device, CL.CL_DEVICE_NAME, 0, null, size);
-		byte buffer[] = new byte[(int) size[0]];
-		clGetDeviceInfo(device, CL.CL_DEVICE_NAME, buffer.length, Pointer.to(buffer), null);
-
-		// Create a string from the buffer (excluding the trailing \0 byte)
-		System.out.println("device: " + new String(buffer, 0, buffer.length - 1));
-	}
-
+	/**
+	 * Single precision general matrix multiplication.
+	 *
+	 * @param aTranspose the a transpose
+	 * @param bTranspose the b transpose
+	 * @param m the m dimension
+	 * @param n the n dimension
+	 * @param k the k dimension
+	 * @param a the a array
+	 * @param lda the a leading dimension
+	 * @param b the b array
+	 * @param ldb the b leading dimension
+	 * @param c the c array
+	 * @param ldc the c leading dimension
+	 * @return the output
+	 */
 	public static float[] sgemm(int aTranspose, int bTranspose, int m, int n, int k, float[] a, int lda, float[] b, int ldb,
 								float[] c, int ldc) {
 		cl_mem aBuffer = gpuAlloc(CL_MEM_READ_ONLY, m * k, a);
@@ -121,6 +124,22 @@ public class GPU {
 		return result;
 	}
 
+	/**
+	 * Single precision general matrix multiplication that takes buffers as inputs.
+	 *
+	 * @param aTranspose the a transpose
+	 * @param bTranspose the b transpose
+	 * @param m the m dimension
+	 * @param n the n dimension
+	 * @param k the k dimension
+	 * @param aBuffer the a buffer
+	 * @param lda the a leading dimension
+	 * @param bBuffer the b buffer
+	 * @param ldb the b leading dimension
+	 * @param c the c buffer
+	 * @param ldc the c leading dimension
+	 * @return the output
+	 */
 	public static float[] sgemm(int aTranspose, int bTranspose, int m, int n, int k, cl_mem aBuffer, int lda, cl_mem bBuffer, int ldb,
 								float[] c, int ldc) {
 		cl_mem cBuffer = gpuAlloc(CL_MEM_READ_WRITE, m * n, c);
@@ -141,6 +160,15 @@ public class GPU {
 		return result;
 	}
 
+	/**
+	 * Single precision ax + b.
+	 *
+	 * @param n       the size
+	 * @param alpha   the coefficient a
+	 * @param x       the x array
+	 * @param yBuffer the b values
+	 * @return the output
+	 */
 	public static float[] saxpy(int n, float alpha, float[] x, cl_mem yBuffer) {
 		// Create the device input buffers
 		cl_mem xBuffer = gpuAlloc(CL_MEM_READ_ONLY, n, x);
@@ -161,6 +189,14 @@ public class GPU {
 		return result;
 	}
 
+	/**
+	 * Single precision ax
+	 *
+	 * @param n     the size
+	 * @param alpha the coefficient a
+	 * @param x     the x array
+	 * @return the output
+	 */
 	public static cl_mem sscal(int n, float alpha, float[] x) {
 		// Create the device input buffers
 		cl_mem xBuffer = gpuAlloc(CL_MEM_READ_ONLY, n, x);
@@ -173,6 +209,14 @@ public class GPU {
 		return xBuffer;
 	}
 
+	/**
+	 * Allocates float arrays to buffers.
+	 *
+	 * @param flags  the flags
+	 * @param size   the size
+	 * @param values the values
+	 * @return the memory buffer
+	 */
 	public static cl_mem gpuAlloc(long flags, int size, float[] values) {
 		cl_mem buffer = clCreateBuffer(context, flags, size
 			* Sizeof.cl_float, null, null);
@@ -181,5 +225,25 @@ public class GPU {
 			* Sizeof.cl_float, Pointer.to(values), 0, null, null);
 
 		return buffer;
+	}
+
+	private static void getPlatformName(cl_platform_id platform) {
+		long size[] = new long[1];
+		clGetPlatformInfo(platform, CL.CL_PLATFORM_NAME, 0, null, size);
+		byte buffer[] = new byte[(int) size[0]];
+		clGetPlatformInfo(platform, CL.CL_PLATFORM_NAME, buffer.length, Pointer.to(buffer), null);
+
+		// Create a string from the buffer (excluding the trailing \0 byte)
+		System.out.println("platform: " + new String(buffer, 0, buffer.length - 1));
+	}
+
+	private static void getDeviceName(cl_device_id device) {
+		long size[] = new long[1];
+		clGetDeviceInfo(device, CL.CL_DEVICE_NAME, 0, null, size);
+		byte buffer[] = new byte[(int) size[0]];
+		clGetDeviceInfo(device, CL.CL_DEVICE_NAME, buffer.length, Pointer.to(buffer), null);
+
+		// Create a string from the buffer (excluding the trailing \0 byte)
+		System.out.println("device: " + new String(buffer, 0, buffer.length - 1));
 	}
 }

@@ -17,6 +17,7 @@ import java.io.IOException;
 import java.util.Objects;
 import java.util.logging.Level;
 import java.util.logging.Logger;
+import java.util.stream.IntStream;
 
 /**
  * The convolutional layer revolves around convolutions in image processing. Using a similar method, filters are convolved around an image
@@ -46,7 +47,7 @@ public class Convolutional implements Layer {
 	private int outputHeight, outputWidth, stride;
 
 	// the input width and input height are the heights and widths of the inputs provided to the layer
-	private int inputHeight, inputWidth, depth;
+	private int depth, inputHeight, inputWidth;
 
 	private float[] filters, biases;
 	private float[] gradient, biasGradient;
@@ -81,9 +82,9 @@ public class Convolutional implements Layer {
 	 * @param dis the input stream
 	 */
 	Convolutional(DataInputStream dis, UpdaterType updaterType) throws IOException {
+		depth = dis.readInt();
 		inputHeight = dis.readInt();
 		inputWidth = dis.readInt();
-		depth = dis.readInt();
 		padHeight = dis.readInt();
 		padWidth = dis.readInt();
 		pad = dis.readInt();
@@ -96,17 +97,6 @@ public class Convolutional implements Layer {
 		dilatedSize = dis.readInt();
 
 		activation = Activation.fromString(dis);
-
-		System.out.println("Type: " + getType());
-		System.out.println(String.format("Input Dimensions (h x w x d): %d x %d x %d", inputHeight, inputWidth, depth));
-		System.out.println("Pad: " + pad);
-		System.out.println(String.format("Pad Dimensions (h x w x d): %d x %d x %d", padHeight, padWidth, depth));
-		System.out.println("Stride: " + stride);
-		System.out.println("Filter Size: " + filterSize);
-		System.out.println(String.format("Output Size (h x w x d): %d x %d x %d", outputHeight, outputWidth, filterAmount));
-		System.out.println("Activation: " + activation.getType());
-
-		System.out.println("Importing weights.");
 		filterUpdater = updaterType.create(dis);
 		filters = new float[filterAmount * depth * filterSize * filterSize];
 
@@ -126,8 +116,6 @@ public class Convolutional implements Layer {
 				}
 			}
 		}
-
-		System.out.println("Done importing weights.");
 	}
 
 	static float[] pad(float[] input, int batchSize, int pad, int depth, int padHeight, int padWidth, int inputHeight, int inputWidth) {
@@ -210,24 +198,19 @@ public class Convolutional implements Layer {
 	}
 
 	public void setDimensions(int[] dimensions, UpdaterType updaterType) {
-		System.out.println("Type: " + getType());
-
 		if (dimensions.length < 3)
 			throw new IllegalArgumentException();
 
-		this.inputHeight = dimensions[0];
-		this.inputWidth = dimensions[1];
-		this.depth = dimensions[2];
+		this.depth = dimensions[0];
+		this.inputHeight = dimensions[1];
+		this.inputWidth = dimensions[2];
 
-		System.out.println(String.format("Input Dimensions (h x w x d): %d x %d x %d", inputHeight, inputWidth, depth));
-
-		if (inputHeight <= 0 || inputWidth <= 0 || depth <= 0)
+		if (depth <= 0 || inputHeight <= 0 || inputWidth <= 0)
 			throw new IllegalArgumentException("Invalid input dimensions.");
 
 		// calculating the post padding dimensions
 		padHeight = inputHeight + 2 * pad;
 		padWidth = inputWidth + 2 * pad;
-		System.out.println(String.format("Pad Dimensions (h x w x d): %d x %d x %d", padHeight, padWidth, depth));
 
 		if ((padHeight - filterSize) % stride != 0 || (padWidth - filterSize) % stride != 0) {
 			Logger.getGlobal().log(Level.WARNING, "Filter sizes and stride do not match", new IllegalArgumentException());
@@ -236,15 +219,12 @@ public class Convolutional implements Layer {
 		// calculating the post convolution dimensions
 		this.outputHeight = (padHeight - dilatedSize) / stride + 1;
 		this.outputWidth = (padWidth - dilatedSize) / stride + 1;
-		System.out.println(String.format("Output Size (h x w x d): %d x %d x %d", outputHeight, outputWidth, filterAmount));
 
 		if (outputHeight <= 0 || outputWidth <= 0 || filterAmount <= 0)
 			throw new IllegalArgumentException("Invalid output dimensions.");
 
 		if (filterSize <= 0)
 			throw new IllegalArgumentException("Invalid filter dimensions.");
-
-		System.out.println("Activation: " + activation.getType());
 
 		filters = new float[filterAmount * depth * filterSize * filterSize];
 		filterUpdater = updaterType.create(filters.length, true);
@@ -355,8 +335,9 @@ public class Convolutional implements Layer {
 
 		int patchSize = filterSize * filterSize * depth;
 
-		float[] deltaMatrix = new float[filterAmount * outputHeight * outputWidth * batchSize];
-		for (int b = 0; b < batchSize; b++) {
+		float[] deltaMatrix = new float[batchSize * filterAmount * outputHeight * outputWidth];
+
+		IntStream.range(0, batchSize).parallel().forEach(b -> {
 			for (int f = 0; f < filterAmount; f++) {
 				for (int i = 0, h = 0; i < outputHeight; i++, h += stride) {
 					for (int j = 0, w = 0; j < outputWidth; j++, w += stride) {
@@ -369,7 +350,7 @@ public class Convolutional implements Layer {
 					}
 				}
 			}
-		}
+		});
 
 		cl_mem deltaBuffer = GPU.gpuAlloc(CL.CL_MEM_READ_ONLY, deltaMatrix.length, deltaMatrix);
 		float[] result = GPU.sgemm(CLBlastTranspose.CLBlastTransposeYes, CLBlastTranspose.CLBlastTransposeNo,
@@ -468,9 +449,9 @@ public class Convolutional implements Layer {
 	}
 
 	public void export(DataOutputStream dos) throws IOException {
+		dos.writeInt(depth);
 		dos.writeInt(inputHeight);
 		dos.writeInt(inputWidth);
-		dos.writeInt(depth);
 		dos.writeInt(padHeight);
 		dos.writeInt(padWidth);
 		dos.writeInt(pad);
@@ -503,7 +484,7 @@ public class Convolutional implements Layer {
 	}
 
 	public int[] getOutputDimensions() {
-		return new int[]{outputHeight, outputWidth, filterAmount};
+		return new int[]{filterAmount, outputHeight, outputWidth};
 	}
 
 	public LayerType getType() {

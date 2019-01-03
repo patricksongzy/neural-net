@@ -7,6 +7,7 @@ import java.io.DataInputStream;
 import java.io.DataOutputStream;
 import java.io.IOException;
 import java.util.concurrent.ThreadLocalRandom;
+import java.util.stream.IntStream;
 
 /**
  * The Dropout layer drops certain connections to reduce over-fitting during training. During evaluation, dropout layers do not take effect.
@@ -28,24 +29,16 @@ public class Dropout implements Layer {
 	}
 
 	Dropout(DataInputStream dis) throws IOException {
-		System.out.println("Type: " + getType());
 		inputSize = dis.readInt();
-		System.out.println("Input Size: " + inputSize);
 		dropout = dis.readFloat();
-		System.out.println("Dropout: " + dropout);
 	}
 
 	public void setDimensions(int[] dimensions, UpdaterType updaterType) {
-		System.out.println("Type: " + getType());
-
 		this.dimensions = dimensions;
 
 		inputSize = dimensions[0];
 		for (int i = 1; i < dimensions.length; i++)
 			inputSize *= dimensions[i];
-
-		System.out.println("Input Size: " + inputSize);
-		System.out.println("Dropout: " + dropout);
 	}
 
 	public void setMode(Mode mode) {
@@ -85,7 +78,7 @@ public class Dropout implements Layer {
 		if (mode == Mode.TRAIN) {
 			output = new float[batchSize * inputSize];
 
-			for (int b = 0; b < batchSize; b++) {
+			IntStream.range(0, batchSize).parallel().forEach(b -> {
 				for (int i = 0; i < inputSize; i++) {
 					// if a random float is past the dropout threshold, then drop the connection by setting the output to zero
 					if (ThreadLocalRandom.current().nextFloat() < dropout)
@@ -93,7 +86,7 @@ public class Dropout implements Layer {
 					else
 						output[i + inputSize * b] = input[i + inputSize * b] / (1 - dropout);
 				}
-			}
+			});
 
 			return output;
 		}

@@ -62,13 +62,8 @@ public class GRU implements Layer {
 	}
 
 	GRU(DataInputStream dis, UpdaterType updaterType) throws IOException {
-		System.out.println("Type: " + getType());
-
 		inputSize = dis.readInt();
 		outputSize = dis.readInt();
-
-		System.out.println("Input Size: " + inputSize);
-		System.out.println("Output Size: " + outputSize);
 
 		wz = new float[outputSize * inputSize + outputSize * outputSize];
 		wr = new float[outputSize * inputSize + outputSize * outputSize];
@@ -80,7 +75,6 @@ public class GRU implements Layer {
 
 		hiddenActivation = Activation.fromString(dis);
 		activation = Activation.fromString(dis);
-		System.out.println("Activations (z/r, hc): " + hiddenActivation.getType() + ", " + activation.getType());
 
 		biasUpdaters = new Updater[3];
 		weightUpdaters = new Updater[3];
@@ -89,7 +83,6 @@ public class GRU implements Layer {
 			biasUpdaters[i] = updaterType.create(dis);
 		}
 
-		System.out.println("Importing weights.");
 		for (int i = 0; i < outputSize * inputSize + outputSize * outputSize; i++) {
 			wz[i] = dis.readFloat();
 			wr[i] = dis.readFloat();
@@ -103,25 +96,17 @@ public class GRU implements Layer {
 		}
 
 		init();
-		System.out.println("Done importing weights.");
 	}
 
 	public void setDimensions(int[] dimensions, UpdaterType updaterType) {
-		System.out.println("Type: " + getType());
-
 		inputSize = dimensions[0];
 		for (int i = 1; i < dimensions.length; i++)
 			inputSize *= dimensions[i];
-
-		System.out.println("Input Size: " + inputSize);
-		System.out.println("Output Size: " + outputSize);
 
 		if (inputSize <= 0)
 			throw new IllegalArgumentException("Invalid input dimensions.");
 		if (outputSize <= 0)
 			throw new IllegalArgumentException("Invalid output dimensions.");
-
-		System.out.println("Activations (z/r, hc): " + hiddenActivation.getType() + ", " + activation.getType());
 
 		wz = new float[outputSize * inputSize + outputSize * outputSize];
 		wr = new float[outputSize * inputSize + outputSize * outputSize];
