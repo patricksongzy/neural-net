@@ -36,15 +36,17 @@ public class GPU {
 		final long deviceType = CL_DEVICE_TYPE_ALL;
 
 		// Obtain the number of platforms
-		int numPlatformsArray[] = new int[1];
-		clGetPlatformIDs(0, null, numPlatformsArray);
-		int numPlatforms = numPlatformsArray[0];
+		int[] amounts = new int[1];
+		clGetPlatformIDs(0, null, amounts);
+		int platformAmount = amounts[0];
 
 		// Obtain a platform ID
-		cl_platform_id platforms[] = new cl_platform_id[numPlatforms];
+		cl_platform_id[] platforms = new cl_platform_id[platformAmount];
 		clGetPlatformIDs(platforms.length, platforms, null);
+
 		if (platformIndex > platforms.length)
 			throw new IllegalArgumentException("Invalid platform.");
+
 		cl_platform_id platform = platforms[platformIndex];
 		getPlatformName(platform);
 
@@ -53,15 +55,16 @@ public class GPU {
 		contextProperties.addProperty(CL_CONTEXT_PLATFORM, platform);
 
 		// Obtain the number of devices for the platform
-		int numDevicesArray[] = new int[1];
-		clGetDeviceIDs(platform, deviceType, 0, null, numDevicesArray);
-		int numDevices = numDevicesArray[0];
+		clGetDeviceIDs(platform, deviceType, 0, null, amounts);
+		int deviceAmount = amounts[0];
 
 		// Obtain a device ID
-		cl_device_id devices[] = new cl_device_id[numDevices];
-		clGetDeviceIDs(platform, deviceType, numDevices, devices, null);
+		cl_device_id[] devices = new cl_device_id[deviceAmount];
+		clGetDeviceIDs(platform, deviceType, deviceAmount, devices, null);
+
 		if (deviceIndex > devices.length)
 			throw new IllegalArgumentException("Invalid device.");
+
 		cl_device_id device = devices[deviceIndex];
 		getDeviceName(device);
 
