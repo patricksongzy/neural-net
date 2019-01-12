@@ -35,44 +35,43 @@ public class GPU {
 
 		final long deviceType = CL_DEVICE_TYPE_ALL;
 
-		// Obtain the number of platforms
+		// obtain number of platforms
 		int[] amounts = new int[1];
 		clGetPlatformIDs(0, null, amounts);
 		int platformAmount = amounts[0];
 
-		// Obtain a platform ID
+		// obtain platform
 		cl_platform_id[] platforms = new cl_platform_id[platformAmount];
-		clGetPlatformIDs(platforms.length, platforms, null);
+		clGetPlatformIDs(platformAmount, platforms, null);
 
-		if (platformIndex > platforms.length)
+		if (platformIndex > platformAmount)
 			throw new IllegalArgumentException("Invalid platform.");
 
 		cl_platform_id platform = platforms[platformIndex];
 		getPlatformName(platform);
 
-		// Initialize the context properties
+		// initialize context properties
 		cl_context_properties contextProperties = new cl_context_properties();
 		contextProperties.addProperty(CL_CONTEXT_PLATFORM, platform);
 
-		// Obtain the number of devices for the platform
+		// obtain the number of devices for platform
 		clGetDeviceIDs(platform, deviceType, 0, null, amounts);
 		int deviceAmount = amounts[0];
 
-		// Obtain a device ID
+		// obtain device
 		cl_device_id[] devices = new cl_device_id[deviceAmount];
 		clGetDeviceIDs(platform, deviceType, deviceAmount, devices, null);
 
-		if (deviceIndex > devices.length)
+		if (deviceIndex > deviceAmount)
 			throw new IllegalArgumentException("Invalid device.");
 
 		cl_device_id device = devices[deviceIndex];
 		getDeviceName(device);
 
-		// Create a context for the selected device
+		// create a context for device
 		context = clCreateContext(contextProperties, 1,
 			new cl_device_id[]{device}, null, null, null);
 
-		// Create a command-queue
 		commandQueue = clCreateCommandQueueWithProperties(context, device, new cl_queue_properties(), null);
 
 		if (shutdownHook != null)
