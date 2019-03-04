@@ -6,6 +6,7 @@ import neuralnet.costs.CostType;
 import neuralnet.layers.Layer;
 import neuralnet.layers.LayerType;
 import neuralnet.optimizers.UpdaterType;
+import neuralnet.schedules.Schedule;
 import plot.Plot;
 
 import java.io.*;
@@ -40,6 +41,7 @@ public class Model {
 
 	// TODO: Implement non-sequential
 	private Layer[] layers;
+	private Schedule schedule;
 	private Cost cost;
 
 	private Model(Layer[] layers, CostType costType, UpdaterType updaterType, int[] inputDimensions) {
@@ -50,6 +52,21 @@ public class Model {
 		Objects.requireNonNull(inputDimensions);
 
 		this.layers = layers;
+
+		this.schedule = new Schedule() {
+			public void init(UpdaterType updaterType, int batchSize, int keyAmount) {
+			}
+
+			public void increment(int s) {
+			}
+
+			public void endEpoch(int i) {
+			}
+
+			public void step() {
+			}
+		};
+
 		this.cost = costType;
 		this.updaterType = updaterType;
 
@@ -116,6 +133,11 @@ public class Model {
 		}
 	}
 
+	public void setSchedule(Schedule schedule) {
+		Objects.requireNonNull(schedule);
+		this.schedule = schedule;
+	}
+
 	public int[] getOutputDimensions() {
 		return layers[layers.length - 1].getOutputDimensions();
 	}
@@ -146,7 +168,6 @@ public class Model {
 	 *
 	 * @param targets the targets
 	 */
-	@SuppressWarnings("WeakerAccess")
 	public void backward(float[] targets) {
 		float[] delta = layers[layers.length - 1].backward(cost, targets, layers.length > 1);
 
@@ -154,7 +175,6 @@ public class Model {
 			delta = layers[i].backward(delta, i > 0);
 	}
 
-	@SuppressWarnings("WeakerAccess")
 	public void update(int length) {
 		List<Callable<Void>> tasks = new ArrayList<>();
 
@@ -174,8 +194,8 @@ public class Model {
 		tasks.clear();
 	}
 
-	public void train(Map<float[], Float> data, int batchSize, int epochs, float max, float min, float decay, int restartInterval,
-					  int restartMultiplier, int warmup, int checkpoint, String name) {
+	@SuppressWarnings("Duplicates")
+	public void train(Map<float[], Float> data, int batchSize, int epochs, int checkpoint, String name) {
 		new Thread(() -> Application.launch(Plot.class, (String) null)).start();
 
 		// setting mode to training mode
@@ -185,11 +205,9 @@ public class Model {
 
 		int inputSize = keys.get(0).length;
 
-		int batch = 0;
-		updaterType.init(max);
-		updaterType.setDecay(decay * (float) Math.sqrt((float) batchSize / (keys.size() * restartInterval)));
+		schedule.init(updaterType, batchSize, keys.size());
 
-		float current = 0;
+		int batch = 0;
 		for (int i = 1; i <= epochs; i++) {
 			if (i % checkpoint == 0)
 				export(name);
@@ -200,22 +218,9 @@ public class Model {
 			System.out.println("Epoch: " + i + "/" + epochs);
 			// looping through the training set
 			for (int j = 0; j < keys.size(); j += batchSize, batch++) {
-				if (i <= warmup) {
-					updaterType.init((max / warmup) * (current / keys.size()));
-				} else if ((current / keys.size()) == restartInterval) {
-					System.out.println("Restarting");
-
-					current = 0;
-					restartInterval *= restartMultiplier;
-
-					updaterType.init(max);
-					updaterType.setDecay(decay * (float) Math.sqrt((float) batchSize / (keys.size() * restartInterval)));
-				} else {
-					updaterType.init(min + 0.5f * (max - min) * (1 + (float) Math.cos((current / keys.size()) * Math.PI / restartInterval)));
-				}
-
 				// calculating the batch size
 				int s = (j + batchSize) > keys.size() ? (keys.size() % batchSize) : batchSize;
+				schedule.step();
 
 				float[] inputs = new float[s * inputSize];
 				float[] targets = new float[s];
@@ -248,18 +253,17 @@ public class Model {
 
 				Plot.update(batch, average);
 
-				current += s;
+				schedule.increment(s);
 			}
 
 			System.out.println();
 
-			if (i == warmup)
-				current = 0;
+			schedule.endEpoch(i);
 		}
 	}
 
-	public void trainRecurrent(Map<float[][], float[]> data, int batchSize, int bptt, int epochs, float max, float min, float decay,
-							   int restartInterval, int restartMultiplier, int checkpoint, String name) {
+	@SuppressWarnings("Duplicates")
+	public void trainRecurrent(Map<float[][], float[]> data, int batchSize, int bptt, int epochs, int checkpoint, String name) {
 		new Thread(() -> Application.launch(Plot.class, (String) null)).start();
 
 		// setting mode to training mode
@@ -268,13 +272,7 @@ public class Model {
 		List<float[][]> keys = new ArrayList<>(data.keySet());
 		keys.sort(Comparator.comparingInt(c -> c.length));
 
-		updaterType.setDecay(decay * (float) Math.sqrt((float) 1 / (keys.size() * restartInterval)));
-
 		int batch = 0;
-		updaterType.init(max);
-		updaterType.setDecay(decay * (float) Math.sqrt((float) 1 / (keys.size() * restartInterval)));
-
-		float current = 0;
 		for (int i = 1; i <= epochs; i++) {
 			if (i % checkpoint == 0)
 				export(name);
@@ -283,18 +281,6 @@ public class Model {
 			Map<float[][], float[][]> group = new HashMap<>();
 			// looping through the training set
 			for (int j = 0; j < keys.size(); j += batchSize, batch++) {
-				if ((current / keys.size()) == restartInterval) {
-					System.out.println("Restarting");
-
-					current = 0;
-					restartInterval *= restartMultiplier;
-
-					updaterType.init(max);
-					updaterType.setDecay(decay * (float) Math.sqrt((float) batchSize / (keys.size() * restartInterval)));
-				} else {
-					updaterType.init(min + 0.5f * (max - min) * (1 + (float) Math.cos((current / keys.size()) * Math.PI / restartInterval)));
-				}
-
 				// batch size
 				int s = j + batchSize > keys.size() ? keys.size() % batchSize : batchSize;
 				// step size
@@ -370,8 +356,6 @@ public class Model {
 
 				if ((j + 1) % 100 == 0)
 					export(name);
-
-				current += s;
 			}
 
 			System.out.println();
@@ -383,7 +367,6 @@ public class Model {
 	 *
 	 * @param mode the mode
 	 */
-	@SuppressWarnings("WeakerAccess")
 	public void setMode(Layer.Mode mode) {
 		for (Layer layer : layers)
 			layer.setMode(mode);
@@ -435,7 +418,6 @@ public class Model {
 	 *
 	 * @param targets the targets
 	 */
-	@SuppressWarnings("WeakerAccess")
 	public void backward(float[][] targets) {
 		float[][] delta = new float[targets.length][];
 
@@ -520,6 +502,7 @@ public class Model {
 		return pass;
 	}
 
+	@SuppressWarnings("Duplicates")
 	private boolean checkParameters(float[] parameters, float[] gradient, float[] input, float[] target, int batchSize) {
 		double epsilon = 1e-3;
 		double numerator = 0, denominator = 0;
@@ -581,6 +564,7 @@ public class Model {
 		return pass;
 	}
 
+	@SuppressWarnings("Duplicates")
 	private boolean checkParameters(float[] parameters, float[] gradient, float[][] input, float[][] target, int batchSize) {
 		double epsilon = 1e-3;
 		double numerator = 0, denominator = 0;
@@ -659,6 +643,7 @@ public class Model {
 	 */
 	public static class Builder {
 		private final ArrayList<Layer> LAYERS = new ArrayList<>();
+		private Schedule schedule;
 		private CostType cost;
 		private UpdaterType updaterType;
 		private int[] inputDimensions;

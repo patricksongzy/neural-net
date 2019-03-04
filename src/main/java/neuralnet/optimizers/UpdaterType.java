@@ -11,36 +11,6 @@ import java.io.IOException;
 public enum UpdaterType {
 	ADAM, AMSGRAD;
 
-	public void init(float learningRate) {
-		switch (this) {
-			case ADAM:
-				Adam.setLearningRate(learningRate);
-			case AMSGRAD:
-			default:
-				AMSGrad.setLearningRate(learningRate);
-		}
-	}
-
-	public void setDecay(float decay) {
-		switch (this) {
-			case ADAM:
-				break;
-			case AMSGRAD:
-			default:
-				AMSGrad.setLambda(decay);
-		}
-	}
-
-	public void init(float... parameters) {
-		switch (this) {
-			case ADAM:
-				Adam.init(parameters);
-			case AMSGRAD:
-			default:
-				AMSGrad.init(parameters);
-		}
-	}
-
 	/**
 	 * Creates an UpdaterType, given an input stream.
 	 *
@@ -53,9 +23,45 @@ public enum UpdaterType {
 				Adam.importParameters(dis);
 				return ADAM;
 			case AMSGRAD:
-			default:
 				AMSGrad.importParameters(dis);
 				return AMSGRAD;
+			default:
+				return null;
+		}
+	}
+
+	public void init(float learningRate) {
+		switch (this) {
+			case ADAM:
+				Adam.setLearningRate(learningRate);
+				break;
+			case AMSGRAD:
+				AMSGrad.setLearningRate(learningRate);
+				break;
+			default:
+		}
+	}
+
+	public void setDecay(float decay) {
+		switch (this) {
+			case ADAM:
+				break;
+			case AMSGRAD:
+				AMSGrad.setLambda(decay);
+				break;
+			default:
+		}
+	}
+
+	public void init(float... parameters) {
+		switch (this) {
+			case ADAM:
+				Adam.init(parameters);
+				break;
+			case AMSGRAD:
+				AMSGrad.init(parameters);
+				break;
+			default:
 		}
 	}
 
@@ -69,8 +75,9 @@ public enum UpdaterType {
 			case ADAM:
 				return new Adam(size);
 			case AMSGRAD:
-			default:
 				return new AMSGrad(size, decay);
+			default:
+				return null;
 		}
 	}
 
@@ -85,8 +92,9 @@ public enum UpdaterType {
 			case ADAM:
 				return new Adam(dis);
 			case AMSGRAD:
-			default:
 				return new AMSGrad(dis);
+			default:
+				return null;
 		}
 	}
 
@@ -103,8 +111,9 @@ public enum UpdaterType {
 				Adam.exportParameters(dos);
 				break;
 			case AMSGRAD:
-			default:
 				AMSGrad.exportParameters(dos);
+				break;
+			default:
 		}
 	}
 }

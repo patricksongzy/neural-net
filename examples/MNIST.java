@@ -8,6 +8,7 @@ import neuralnet.layers.Dense;
 import neuralnet.layers.Dropout;
 import neuralnet.layers.Pooling;
 import neuralnet.optimizers.UpdaterType;
+import neuralnet.schedules.CosineRestart;
 import sun.reflect.generics.reflectiveObjects.NotImplementedException;
 
 import java.util.HashMap;
@@ -95,7 +96,8 @@ public class MNIST {
 		}
 
 		// train model
-		model.train(trainData, batchSize, epochs, 0.05f, 0.0001f, 0.005f, epochs / 10, 2,
-			1, "mnist.model");
+		UpdaterType.AMSGRAD.init(0.9f, 0.999f, 0.1f, 0.125f);
+		model.setSchedule(new CosineRestart(0.1f, 0.001f, 0.05f, 1, 2, 1));
+		model.train(trainData, batchSize, epochs, 1, "mnist.model");
 	}
 }
