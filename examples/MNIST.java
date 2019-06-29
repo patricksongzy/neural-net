@@ -78,7 +78,7 @@ public class MNIST {
 		List<int[][]> trainImages = readImages("train-images.idx3-ubyte");
 		int[] trainLabels = readLabels("train-labels.idx1-ubyte");
 
-		Map<float[], Float> trainData = new HashMap<>();
+		Map<float[], float> trainData = new HashMap<>();
 		// create inputs
 		float[][] trainInputs = new float[trainImages.size()][784];
 
@@ -92,7 +92,7 @@ public class MNIST {
 			}
 
 			// use indices for sparse cross-entropy instead of one-hot
-			trainData.put(trainInputs[i], (float) trainLabels[i]);
+			trainData.put(trainInputs[i], new float[] {trainLabels[i]});
 		}
 
 		// train model
