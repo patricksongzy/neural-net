@@ -1,6 +1,7 @@
 # neural-net
 A neural network implementation in Java, for ICS3U and ICS4U. This implementation passes the current tests that have been implemented.
 
+## Example Project: Bird Recogniser
 ![Example project: bird recogniser](https://raw.githubusercontent.com/patricksongzy/neural-net/master/images/bird-recognizer.gif)
 
 ## Project
@@ -28,7 +29,8 @@ Model model = new Model.Builder().add(
 * PSP net is not working correctly (don't know why).
 
 ## No Computational Graphs
-* Makes it a bit clearer on how everything is implemented.
+* An implementation of computational graphs is in-progress.
+* Makes it a bit clearer on how everything is implemented at first.
 
 ## License
 * MIT license.
