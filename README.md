@@ -1,6 +1,8 @@
 # neural-net
 A neural network implementation in Java, for ICS3U and ICS4U. This implementation passes the current tests that have been implemented.
 
+![Example project: bird recogniser](https://raw.githubusercontent.com/patricksongzy/neural-net/master/images/bird-recognizer.gif)
+
 ## Project
 This project includes:
 * Convolutional, Fully-connected, Down-Sampling/Pooling, Dropout, GRU, Inception, Resnet, Batch Norm layers (and more).
