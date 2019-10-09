@@ -112,7 +112,6 @@ public class Pooling implements Layer {
 		switches = new boolean[batchSize * depth * padHeight * padWidth];
 		output = new float[batchSize * depth * downsampleHeight * downsampleWidth];
 
-		// TODO: Quick workaround to let padding work for invalid dimensions. These changes are still not reflected in backpropagation.
 		int roundWidth = (padWidth - downsampleSize) % downsampleStride != 0 ? 1 : 0;
 		int roundHeight = (padHeight - downsampleSize) % downsampleStride != 0 ? 1 : 0;
 
@@ -231,6 +230,7 @@ public class Pooling implements Layer {
 		return new int[]{depth, downsampleHeight, downsampleWidth};
 	}
 
+	@SuppressWarnings("Duplicates")
 	public void export(DataOutputStream dos) throws IOException {
 		dos.writeUTF(mode.toString());
 		dos.writeInt(depth);
@@ -253,7 +253,7 @@ public class Pooling implements Layer {
 		MAX, AVERAGE
 	}
 
-	@SuppressWarnings({"unused", "WeakerAccess"})
+	@SuppressWarnings("unused")
 	public static class Builder {
 		private Mode mode;
 		private int pad;

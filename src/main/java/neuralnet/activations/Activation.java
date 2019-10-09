@@ -13,6 +13,7 @@ public interface Activation {
 	 *
 	 * @param dis the input stream
 	 * @return the ActivationType
+	 * @throws IOException if there is an error reading from the file
 	 */
 	static Activation fromString(DataInputStream dis) throws IOException {
 		return Type.valueOf(dis.readUTF()).create();
@@ -22,6 +23,7 @@ public interface Activation {
 	 * This method simulates the activation of neurons. It directly modifies the input.
 	 *
 	 * @param x the pre-activated input
+	 * @param batchSize the batch size
 	 */
 	void activation(float[] x, int batchSize);
 
@@ -29,6 +31,7 @@ public interface Activation {
 	 * This method calculates the derivative of the activation.
 	 *
 	 * @param x the activated output
+	 * @return the derivative with respect to the input
 	 */
 	float[] derivative(float[] x);
 
@@ -43,6 +46,7 @@ public interface Activation {
 	 * Exports the ActivationType.
 	 *
 	 * @param dos the output stream
+	 * @throws IOException if there is an error writing to the file
 	 */
 	default void export(DataOutputStream dos) throws IOException {
 		dos.writeUTF(getType().toString());

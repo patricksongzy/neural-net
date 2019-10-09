@@ -16,6 +16,7 @@ public enum UpdaterType {
 	 *
 	 * @param dis the input stream
 	 * @return the UpdaterType
+	 * @throws IOException if there is an error reading from the file
 	 */
 	public static UpdaterType fromString(DataInputStream dis) throws IOException {
 		switch (valueOf(dis.readUTF())) {
@@ -68,6 +69,8 @@ public enum UpdaterType {
 	/**
 	 * Creates an instance, given the current UpdaterType.
 	 *
+	 * @param size the size of the parameters
+	 * @param decay the decay
 	 * @return an instance of the current UpdaterType
 	 */
 	public Updater create(int size, boolean decay) {
@@ -86,6 +89,7 @@ public enum UpdaterType {
 	 *
 	 * @param dis the input stream
 	 * @return the updater
+	 * @throws IOException if there is an error reading from the file
 	 */
 	public Updater create(DataInputStream dis) throws IOException {
 		switch (this) {
@@ -102,6 +106,7 @@ public enum UpdaterType {
 	 * Exports the UpdaterType.
 	 *
 	 * @param dos the output stream
+	 * @throws IOException if there is an error writing to the file
 	 */
 	public void export(DataOutputStream dos) throws IOException {
 		dos.writeUTF(toString());

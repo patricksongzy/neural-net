@@ -235,7 +235,7 @@ public class PSP implements Layer {
 	/**
 	 * Builder for PSP layers.
 	 */
-	@SuppressWarnings({"unused", "WeakerAccess"})
+	@SuppressWarnings("unused")
 	public static class Builder {
 		private LinkedList<Integer> downsampleSizes = new LinkedList<>();
 		private Initializer initializer;

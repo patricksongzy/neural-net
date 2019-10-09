@@ -25,6 +25,7 @@ public interface Cost {
 	 *
 	 * @param output the neural network output
 	 * @param targets the targets
+	 * @param batchSize the batch size
 	 * @return the derivative of cost
 	 */
 	float[] derivative(float[] output, float[] targets, int batchSize);
@@ -37,5 +38,5 @@ public interface Cost {
 	 * @param batchSize the batch size
 	 * @return the derivative of cost with respect to the input to the softmax function
 	 */
-	float[] derviativeSoftmax(float[] output, float[] targets, int batchSize);
+	float[] derivativeSoftmax(float[] output, float[] targets, int batchSize);
 }

@@ -111,12 +111,18 @@ public class Dropout implements Layer {
 		 * The dropout is the chance that a connection will be dropped, during training.
 		 *
 		 * @param dropout the dropout
+		 * @return the builder
 		 */
 		public Builder dropout(float dropout) {
 			this.dropout = dropout;
 			return this;
 		}
 
+		/**
+		 * Builds the layer.
+		 *
+		 * @return the builder
+		 */
 		public Dropout build() {
 			return new Dropout(dropout);
 		}

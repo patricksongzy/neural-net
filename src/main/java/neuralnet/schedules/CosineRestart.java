@@ -37,7 +37,7 @@ public class CosineRestart implements Schedule {
 	}
 
 	public void step() {
-		if (current <= warmup) {
+		if (current < warmup) {
 			updaterType.init((max / warmup) * ((float) current / keyAmount));
 		} else if ((current / keyAmount) == restartInterval) {
 			System.out.println("Restarting");

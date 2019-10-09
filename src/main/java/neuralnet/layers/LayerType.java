@@ -17,7 +17,9 @@ public enum LayerType {
 	 * Imports a layer given an input stream.
 	 *
 	 * @param dis the input stream
+	 * @param updaterType the updater type
 	 * @return the layer
+	 * @throws IOException if there is an error reading from the file
 	 */
 	public static Layer fromString(DataInputStream dis, UpdaterType updaterType) throws IOException {
 		switch (valueOf(dis.readUTF())) {
@@ -54,6 +56,7 @@ public enum LayerType {
 	 * Exports a layer given an output stream.
 	 *
 	 * @param dos the output stream
+	 * @throws IOException if there is an error writing to the file
 	 */
 	public void export(DataOutputStream dos) throws IOException {
 		dos.writeUTF(toString());

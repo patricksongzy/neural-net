@@ -170,7 +170,7 @@ public class Dense implements Layer {
 		float[] output = outputs.peekFirst();
 
 		if (activation.getType() == Activation.Type.SOFTMAX)
-			previousDelta = cost.derviativeSoftmax(output, target, batchSize);
+			previousDelta = cost.derivativeSoftmax(output, target, batchSize);
 		else
 			previousDelta = cost.derivative(output, target, batchSize);
 
@@ -257,7 +257,7 @@ public class Dense implements Layer {
 	/**
 	 * Builder for Dense layers.
 	 */
-	@SuppressWarnings({"unused", "WeakerAccess"})
+	@SuppressWarnings("unused")
 	public static class Builder {
 		private int outputSize;
 		private float temperature;
@@ -272,6 +272,7 @@ public class Dense implements Layer {
 		 * The output size is the amount of outputs for the layer.
 		 *
 		 * @param outputSize the output size
+		 * @return the builder
 		 */
 		public Builder outputSize(int outputSize) {
 			this.outputSize = outputSize;
@@ -284,6 +285,7 @@ public class Dense implements Layer {
 		 * predictions. DO NOT set (use default value) if using for classification or similar tasks.
 		 *
 		 * @param temperature the temperature
+		 * @return the builder
 		 */
 		public Builder temperature(float temperature) {
 			this.temperature = temperature;
@@ -295,6 +297,7 @@ public class Dense implements Layer {
 		 * The activation simulates neurons firing.
 		 *
 		 * @param activation the activation type
+		 * @return the builder
 		 */
 		public Builder activation(Activation activation) {
 			this.activation = activation;
@@ -306,6 +309,7 @@ public class Dense implements Layer {
 		 * The initializer initializes weights.
 		 *
 		 * @param initializer the initializer
+		 * @return the builder
 		 */
 		public Builder initializer(Initializer initializer) {
 			this.initializer = initializer;
@@ -313,6 +317,11 @@ public class Dense implements Layer {
 			return this;
 		}
 
+		/**
+		 * Builds the layer.
+		 *
+		 * @return the layer
+		 */
 		public Dense build() {
 			return new Dense(outputSize, temperature, initializer, activation);
 		}

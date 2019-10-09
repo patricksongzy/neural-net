@@ -224,6 +224,8 @@ public class GRU implements Layer {
 		dBz = new float[outputSize];
 		dBr = new float[outputSize];
 		dBh = new float[outputSize];
+
+		transposeWeights();
 	}
 
 	public LayerType getType() {
@@ -242,6 +244,7 @@ public class GRU implements Layer {
 				Arrays.fill(h, 0.1f);
 		}
 
+		// because weights change they must be re-transposed
 		if (mode == Mode.GRADIENT_CHECK)
 			transposeWeights();
 
@@ -252,33 +255,38 @@ public class GRU implements Layer {
 		float[] r = new float[batchSize * outputSize];
 		float[] y = new float[batchSize * outputSize];
 
-		// copying biases to outputs
 		for (int b = 0; b < batchSize; b++) {
+			// copying biases to z
 			System.arraycopy(bz, 0, z, outputSize * b, outputSize);
+			// copying biases to r
 			System.arraycopy(br, 0, r, outputSize * b, outputSize);
+			// copying biases to h
 			System.arraycopy(bh, 0, hc, outputSize * b, outputSize);
-			System.arraycopy(input, inputSize * b, xh, (inputSize + outputSize) * b, inputSize);
-			System.arraycopy(h, outputSize * b, xh, inputSize + (inputSize + outputSize) * b, outputSize);
+			// copying state to the concatenated input and state
+			System.arraycopy(h, outputSize * b, xh, (inputSize + outputSize) * b, outputSize);
+			// copying input to the concatenated input and state
+			System.arraycopy(input, inputSize * b, xh, outputSize + (inputSize + outputSize) * b, inputSize);
 		}
 
-		z = GPU.sgemm(CLBlastTranspose.CLBlastTransposeNo, CLBlastTranspose.CLBlastTransposeNo, batchSize,
-			outputSize, inputSize + outputSize, xh, inputSize + outputSize, wzT, outputSize, z, outputSize);
-		r = GPU.sgemm(CLBlastTranspose.CLBlastTransposeNo, CLBlastTranspose.CLBlastTransposeNo, batchSize,
-			outputSize, inputSize + outputSize, xh, inputSize + outputSize, wrT, outputSize, r, outputSize);
+		z = GPU.sgemm(CLBlastTranspose.CLBlastTransposeNo, CLBlastTranspose.CLBlastTransposeYes, batchSize,
+			outputSize, inputSize + outputSize, xh, inputSize + outputSize, wz, inputSize + outputSize, z, outputSize);
+		r = GPU.sgemm(CLBlastTranspose.CLBlastTransposeNo, CLBlastTranspose.CLBlastTransposeYes, batchSize,
+			outputSize, inputSize + outputSize, xh, inputSize + outputSize, wr, inputSize + outputSize, r, outputSize);
 
 		hiddenActivation.activation(z, batchSize);
 		hiddenActivation.activation(r, batchSize);
 
 		for (int b = 0; b < batchSize; b++) {
-			System.arraycopy(input, inputSize * b, xrh, (inputSize + outputSize) * b, inputSize);
 			for (int i = 0; i < outputSize; i++) {
 				int index = i + outputSize * b;
-				xrh[(inputSize + i) + (inputSize + outputSize) * b] += r[index] * h[index];
+				xrh[i + (inputSize + outputSize) * b] += r[index] * h[index];
 			}
+
+			System.arraycopy(input, inputSize * b, xrh, outputSize + (inputSize + outputSize) * b, inputSize);
 		}
 
-		hc = GPU.sgemm(CLBlastTranspose.CLBlastTransposeNo, CLBlastTranspose.CLBlastTransposeNo, batchSize,
-			outputSize, inputSize + outputSize, xrh, inputSize + outputSize, whT, outputSize, hc, outputSize);
+		hc = GPU.sgemm(CLBlastTranspose.CLBlastTransposeNo, CLBlastTranspose.CLBlastTransposeYes, batchSize,
+			outputSize, inputSize + outputSize, xrh, inputSize + outputSize, wh, inputSize + outputSize, hc, outputSize);
 		activation.activation(hc, batchSize);
 
 		for (int b = 0; b < batchSize; b++) {
@@ -288,7 +296,7 @@ public class GRU implements Layer {
 			}
 		}
 
-		System.arraycopy(h, 0, y, 0, batchSize * outputSize);
+		System.arraycopy(h, 0, y, 0, h.length);
 
 		// adding items to linked list for backpropagation
 		this.xh.push(xh);
@@ -343,7 +351,7 @@ public class GRU implements Layer {
 		for (int b = 0; b < batchSize; b++) {
 			for (int i = 0; i < outputSize; i++) {
 				int index = i + outputSize * b;
-				int inputIndex = (inputSize + i) + (inputSize + outputSize) * b;
+				int inputIndex = i + (inputSize + outputSize) * b;
 
 				dr[index] = xh[inputIndex] * delta[inputIndex] * drActivation[index];
 				dz[index] = dh[index] * (xh[inputIndex] - hc[index]) * dzActivation[index];
@@ -359,10 +367,10 @@ public class GRU implements Layer {
 
 		for (int b = 0; b < batchSize; b++) {
 			if (calculateDelta) {
-				System.arraycopy(delta, (inputSize + outputSize) * b, dx, inputSize * b, inputSize);
+				System.arraycopy(delta, outputSize + (inputSize + outputSize) * b, dx, inputSize * b, inputSize);
 			}
 
-			System.arraycopy(delta, inputSize + (inputSize + outputSize) * b, dh, outputSize * b, outputSize);
+			System.arraycopy(delta, (inputSize + outputSize) * b, dh, outputSize * b, outputSize);
 		}
 
 		// updating parameters
@@ -390,7 +398,21 @@ public class GRU implements Layer {
 		return new float[][][]{{wz, dWz}, {wr, dWr}, {wh, dWh}, {bz, dBz}, {br, dBr}, {bh, dBh}};
 	}
 
+	private void clipGradient(float[] gradient) {
+		float clip = 1;
+		for (int i = 0; i < gradient.length; i++) {
+			gradient[i] = Math.max(Math.min(gradient[i], clip), -clip);
+		}
+	}
+
 	public void update(int length) {
+		clipGradient(dWz);
+		clipGradient(dWr);
+		clipGradient(dWh);
+		clipGradient(dBz);
+		clipGradient(dBr);
+		clipGradient(dBh);
+
 		weightUpdaters[0].update(wz, dWz, length);
 		weightUpdaters[1].update(wr, dWr, length);
 		weightUpdaters[2].update(wh, dWh, length);

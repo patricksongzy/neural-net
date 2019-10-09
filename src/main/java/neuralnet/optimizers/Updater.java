@@ -20,6 +20,7 @@ public interface Updater {
 	 * Export the parameter specific parameters to an output stream.
 	 *
 	 * @param dos the output stream
+	 * @throws IOException if there is an error writing to the file
 	 */
 	void export(DataOutputStream dos) throws IOException;
 }

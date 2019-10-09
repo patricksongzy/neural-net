@@ -448,6 +448,7 @@ public class Convolutional implements Layer {
 		return new float[][][]{{filters, gradient}, {biases, biasGradient}};
 	}
 
+	@SuppressWarnings("Duplicates")
 	public void export(DataOutputStream dos) throws IOException {
 		dos.writeInt(depth);
 		dos.writeInt(inputHeight);
@@ -512,6 +513,7 @@ public class Convolutional implements Layer {
 		 * by allowing filters to traverse such areas.
 		 *
 		 * @param pad the pad
+		 * @return the builder
 		 */
 		public Builder pad(int pad) {
 			this.pad = pad;
@@ -525,6 +527,7 @@ public class Convolutional implements Layer {
 		 * of using pooling
 		 *
 		 * @param stride the stride
+		 * @return the builder
 		 */
 		public Builder stride(int stride) {
 			this.stride = stride;
@@ -536,6 +539,7 @@ public class Convolutional implements Layer {
 		 * The filter amount is the amount of kernels that can be learned and applied during convolution.
 		 *
 		 * @param filterAmount the filter amount
+		 * @return the builder
 		 */
 		public Builder filterAmount(int filterAmount) {
 			this.filterAmount = filterAmount;
@@ -547,6 +551,7 @@ public class Convolutional implements Layer {
 		 * The filter size is the size of filters. Larger filter sizes decrease output dimensions faster.
 		 *
 		 * @param filterSize the filter size
+		 * @return the builder
 		 */
 		public Builder filterSize(int filterSize) {
 			this.filterSize = filterSize;
@@ -554,6 +559,12 @@ public class Convolutional implements Layer {
 			return this;
 		}
 
+		/**
+		 * Sets the dilation for the filters.
+		 *
+		 * @param dilation the dilation
+		 * @return the builder
+		 */
 		public Builder dilation(int dilation) {
 			this.dilation = dilation;
 
@@ -564,6 +575,7 @@ public class Convolutional implements Layer {
 		 * The initializer initializes weights.
 		 *
 		 * @param initializer the initializer
+		 * @return the builder
 		 */
 		public Builder initializer(Initializer initializer) {
 			this.initializer = initializer;
@@ -575,6 +587,7 @@ public class Convolutional implements Layer {
 		 * The activation simulates a neuron firing.
 		 *
 		 * @param activationType the activation type
+		 * @return the builder
 		 */
 		public Builder activationType(ActivationType activationType) {
 			this.activationType = activationType;
@@ -582,6 +595,11 @@ public class Convolutional implements Layer {
 			return this;
 		}
 
+		/**
+		 * Builds the layer.
+		 *
+		 * @return the layer
+		 */
 		public Convolutional build() {
 			return new Convolutional(pad, stride, filterAmount, filterSize, dilation, initializer, activationType);
 		}

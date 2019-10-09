@@ -153,10 +153,12 @@ public class Model {
 	/**
 	 * Forward propagates layers.
 	 *
-	 * @param x the input
+	 * @param x         the input
+	 * @param batchSize the batch size
 	 * @return the output
 	 */
 	public float[] forward(float[] x, int batchSize) {
+		// looping through each layer and feeding the output as inputs
 		for (Layer layer : layers)
 			x = layer.forward(x, batchSize);
 
@@ -169,12 +171,19 @@ public class Model {
 	 * @param targets the targets
 	 */
 	public void backward(float[] targets) {
+		// calculating the derivative of cost first
 		float[] delta = layers[layers.length - 1].backward(cost, targets, layers.length > 1);
 
+		// looping through layers backwards and feeding outputted delta as inputs.
 		for (int i = layers.length - 2; i >= 0; i--)
 			delta = layers[i].backward(delta, i > 0);
 	}
 
+	/**
+	 * Updates the parameters of all layers after backpropagation.
+	 *
+	 * @param length the length of the parameters
+	 */
 	public void update(int length) {
 		List<Callable<Void>> tasks = new ArrayList<>();
 
@@ -194,8 +203,17 @@ public class Model {
 		tasks.clear();
 	}
 
+	/**
+	 * Trains the model from data. For sparse data, make each target a float array with a single element.
+	 *
+	 * @param data       the data
+	 * @param batchSize  the batch size
+	 * @param epochs     the amount of epochs
+	 * @param checkpoint the amount of epochs to export
+	 * @param name       the exported model name
+	 */
 	@SuppressWarnings("Duplicates")
-	public void train(Map<float[], Float> data, int batchSize, int epochs, int checkpoint, String name) {
+	public void train(Map<float[], float[]> data, int batchSize, int epochs, int checkpoint, String name) {
 		new Thread(() -> Application.launch(Plot.class, (String) null)).start();
 
 		// setting mode to training mode
@@ -204,6 +222,7 @@ public class Model {
 		List<float[]> keys = new ArrayList<>(data.keySet());
 
 		int inputSize = keys.get(0).length;
+		int targetSize = data.get(keys.get(0)).length;
 
 		schedule.init(updaterType, batchSize, keys.size());
 
@@ -223,13 +242,14 @@ public class Model {
 				schedule.step();
 
 				float[] inputs = new float[s * inputSize];
-				float[] targets = new float[s];
+				float[] targets = new float[s * targetSize];
 
 				// creating a batch
 				for (int b = 0; b < s; b++) {
 					float[] input = keys.get(b + j);
+					float[] target = data.get(input);
 					System.arraycopy(input, 0, inputs, b * inputSize, inputSize);
-					targets[b] = data.get(input);
+					System.arraycopy(target, 0, targets, b * targetSize, targetSize);
 				}
 
 				// forward propagating the batch
@@ -270,95 +290,96 @@ public class Model {
 		setMode(Layer.Mode.TRAIN);
 
 		List<float[][]> keys = new ArrayList<>(data.keySet());
-		keys.sort(Comparator.comparingInt(c -> c.length));
+		schedule.init(updaterType, batchSize, keys.size());
 
 		int batch = 0;
 		for (int i = 1; i <= epochs; i++) {
 			if (i % checkpoint == 0)
 				export(name);
 
+			// shuffling data prevents the neural network from learning the order of the data
+			Collections.shuffle(keys);
+
 			System.out.println("Epoch: " + i + "/" + epochs);
-			Map<float[][], float[][]> group = new HashMap<>();
 			// looping through the training set
 			for (int j = 0; j < keys.size(); j += batchSize, batch++) {
-				// batch size
-				int s = j + batchSize > keys.size() ? keys.size() % batchSize : batchSize;
-				// step size
-				int step = bptt;
-				// shortest length
-				int shortest = Integer.MAX_VALUE;
+				// calculating the batch size
+				int s = (j + batchSize) > keys.size() ? (keys.size() % batchSize) : batchSize;
+				schedule.step();
+
+				// going to loop through timesteps to longest input in time
+				int longest = 0;
 
 				for (int b = 0; b < s; b++) {
-					if (keys.get(b + j).length < step)
-						step = keys.get(b + j).length;
-					if (keys.get(b + j).length < shortest)
-						shortest = keys.get(b + j).length;
+					if (keys.get(b + j).length > longest)
+						longest = keys.get(b + j).length;
 				}
 
-				// this isn't the most efficient as it eliminates end data
-				for (int k = 0; k < shortest; k += step) {
-					int n = k + step > shortest ? shortest % step : step;
+				// this is the amount of separate bptt groups the longest input has
+				int sections = (int) ((float) longest / bptt + 0.5);
+
+				// the length of this list is equal to the amount of bptt groups
+				Map<float[][], float[][]> groups = new HashMap<>();
+
+				// creating a batch
+				for (int k = 0; k < longest; k += bptt) {
+					int n = (k + bptt) > longest ? (longest % bptt) : bptt;
 
 					float[][] inputs = new float[n][s * inputSize];
 					float[][] targets = new float[n][s];
 
-					for (int t = 0; t < n; t++) {
+					for (int t = 0; t < n; t++ ) {
 						for (int b = 0; b < s; b++) {
-							// creating a batch
-							System.arraycopy(keys.get(b + j)[t + k], 0, inputs[t], b * inputSize, inputSize);
-							targets[t][b] = data.get(keys.get(b + j))[t + k];
+							float[][] key = keys.get(b + j);
+							if (t + k < key.length) {
+								targets[t][b] = data.get(key)[t + k];
+
+								System.arraycopy(key[t + k], 0, inputs[t], b * inputSize, inputSize);
+							} else {
+								targets[t][b] = -1;
+							}
 						}
 					}
 
-					group.put(inputs, targets);
+					groups.put(inputs, targets);
 				}
 
-				// TODO: data is not fully shuffled
-				if (j + s == keys.size()) {
-					List<float[][]> inputs = new ArrayList<>(group.keySet());
-					Collections.shuffle(inputs);
-					for (int b = 0, k = 0; b < inputs.size(); b++) {
-						float average = 0;
+				List<float[][]> inputs = new ArrayList<>(groups.keySet());
+				for (float[][] input : inputs) {
+					float[][] output = forward(input, s);
+					float[][] target = groups.get(input);
 
-						float[][] input = inputs.get(b);
+					backward(target);
 
-						float[][] target = group.get(input);
+					update(s * output.length);
 
-						// forward propagating the batch
-						float[][] output = forward(input, target[0].length);
+					int progress = (int) ((float) (j + s) / keys.size() * 30 + 0.5);
+					System.out.printf("\r%d/%d [", j + s, keys.size());
 
-						// back propagating batch
-						backward(target);
-						update(output.length * target[0].length);
+					for (int k = 0; k < progress; k++)
+						System.out.print("#");
+					for (int k = progress; k < 30; k++)
+						System.out.print("-");
 
-						for (int t = 0; t < output.length; t++)
-							average += cost.cost(output[t], target[t]);
+					float average = 0;
 
-						average /= output.length * target[0].length;
-
-						int progress = (int) ((float) (b + 1) / inputs.size() * 30 + 0.5);
-						System.out.printf("\r%d/%d [", (b + 1), inputs.size());
-
-						for (int m = 0; m < progress; m++)
-							System.out.print("#");
-						for (int m = progress; m < 30; m++)
-							System.out.print("-");
-
-						System.out.print("] - loss: " + average);
-
-						Plot.update(k + (i - 1) * keys.size(), average);
-
-						k += target[0].length;
+					for (int k = 0; k < output.length; k++) {
+						average += cost.cost(output[k], target[k]);
 					}
 
-					group.clear();
-				}
+					average /= (output.length * s);
 
-				if ((j + 1) % 100 == 0)
-					export(name);
+					System.out.print("] - loss: " + average);
+
+					Plot.update(batch, average);
+
+					schedule.increment(s);
+				}
 			}
 
 			System.out.println();
+
+			schedule.endEpoch(i);
 		}
 	}
 
@@ -451,34 +472,16 @@ public class Model {
 
 			tasks.clear();
 		}
-
-		float clip = 5;
-		float norm = 0;
-		for (Layer layer : layers) {
-			for (float[][] parameters : layer.getParameters()) {
-				for (int p = 0; p < parameters[1].length; p++) {
-					norm += Math.pow(Math.abs(parameters[1][p]), 2);
-				}
-			}
-		}
-
-		norm = (float) Math.max(Math.sqrt(norm), clip);
-
-		for (Layer layer : layers) {
-			for (float[][] parameters : layer.getParameters()) {
-				for (int p = 0; p < parameters[1].length; p++) {
-					parameters[1][p] *= clip / norm;
-				}
-			}
-		}
 	}
 
 	/**
 	 * Gradient checks validate that the implementation of the back propagation algorithm is correct. It does so by comparing the gradients
 	 * with numerical gradients.
 	 *
-	 * @param input  the input
-	 * @param target the target
+	 * @param input     the input
+	 * @param target    the target
+	 * @param batchSize the batch size
+	 * @return whether the gradient check passes
 	 */
 	@SuppressWarnings("Duplicates")
 	public boolean gradientCheck(float[] input, float[] target, int batchSize) {
@@ -542,6 +545,15 @@ public class Model {
 		return (numerator / denominator) < 0.2;
 	}
 
+	/**
+	 * Gradient checks validate that the implementation of the back propagation algorithm is correct. It does so by comparing the gradients
+	 * with numerical gradients.
+	 *
+	 * @param input     the input
+	 * @param target    the target
+	 * @param batchSize the batch size
+	 * @return whether the gradient check passes
+	 */
 	@SuppressWarnings("Duplicates")
 	public boolean gradientCheck(float[][] input, float[][] target, int batchSize) {
 		setMode(Layer.Mode.GRADIENT_CHECK);
@@ -652,6 +664,7 @@ public class Model {
 		 * Adds a layer.
 		 *
 		 * @param layer the layer
+		 * @return the builder
 		 */
 		public Builder add(Layer layer) {
 			if (layer != null)
@@ -664,12 +677,19 @@ public class Model {
 		 * Sets the cost function.
 		 *
 		 * @param cost the CostType
+		 * @return the builder
 		 */
 		public Builder cost(CostType cost) {
 			this.cost = cost;
 			return this;
 		}
 
+		/**
+		 * Sets the updater type.
+		 *
+		 * @param updaterType the UpdaterType
+		 * @return the builder
+		 */
 		public Builder updaterType(UpdaterType updaterType) {
 			this.updaterType = updaterType;
 			return this;
@@ -679,12 +699,18 @@ public class Model {
 		 * Sets the input dimensions with the following order: depth, width, height. Any matrices are in row major format.
 		 *
 		 * @param inputDimensions the input dimensions
+		 * @return the builder
 		 */
 		public Builder inputDimensions(int... inputDimensions) {
 			this.inputDimensions = inputDimensions;
 			return this;
 		}
 
+		/**
+		 * Builds the model.
+		 *
+		 * @return the model
+		 */
 		public Model build() {
 			return new Model(LAYERS.toArray(new Layer[0]), cost, updaterType, inputDimensions);
 		}

@@ -39,7 +39,7 @@ public enum CostType implements Cost {
 			return delta;
 		}
 
-		public float[] derviativeSoftmax(float[] output, float[] targets, int batchSize) {
+		public float[] derivativeSoftmax(float[] output, float[] targets, int batchSize) {
 			int size = output.length / batchSize;
 
 			if (batchSize <= 0)
@@ -94,7 +94,7 @@ public enum CostType implements Cost {
 			return delta;
 		}
 
-		public float[] derviativeSoftmax(float[] output, float[] targets, int batchSize) {
+		public float[] derivativeSoftmax(float[] output, float[] targets, int batchSize) {
 			throw new UnsupportedOperationException();
 		}
 	}, SPARSE_CROSS_ENTROPY {
@@ -110,10 +110,11 @@ public enum CostType implements Cost {
 
 			float cost = 0;
 			for (int b = 0; b < targets.length; b++) {
-				if (targets[b] > size)
+				if (targets[b] > size) {
 					throw new IllegalArgumentException("Invalid target.");
-
-				cost += Math.log(output[(int) targets[b] + size * b] + 1e-16);
+				} else if (targets[b] != -1) {
+					cost += Math.log(output[(int) targets[b] + size * b] + 1e-16);
+				}
 			}
 
 			return -cost;
@@ -130,18 +131,19 @@ public enum CostType implements Cost {
 			float[] delta = new float[output.length];
 
 			IntStream.range(0, batchSize).parallel().forEach(b -> {
-				if (targets[b] > size)
-					throw new IllegalArgumentException("Invalid targets.");
-
 				int index = (int) targets[b] + size * b;
 
-				delta[index] = -1 / output[index];
+				if (targets[b] > size) {
+					throw new IllegalArgumentException("Invalid targets.");
+				} else if (targets[b] != -1) {
+					delta[index] = -1 / output[index];
+				}
 			});
 
 			return delta;
 		}
 
-		public float[] derviativeSoftmax(float[] output, float[] targets, int batchSize) {
+		public float[] derivativeSoftmax(float[] output, float[] targets, int batchSize) {
 			int size = output.length / batchSize;
 
 			if (batchSize <= 0)
@@ -154,8 +156,12 @@ public enum CostType implements Cost {
 			IntStream.range(0, batchSize).parallel().forEach(b -> {
 				int index = (int) targets[b] + size * b;
 
-				System.arraycopy(output, size * b, delta, size * b, size);
-				delta[index] -= 1;
+				if (targets[b] > size) {
+					throw new IllegalArgumentException("Invalid targets.");
+				} else if (targets[b] != -1) {
+					System.arraycopy(output, size * b, delta, size * b, size);
+					delta[index] -= 1;
+				}
 			});
 
 			return delta;
@@ -167,6 +173,7 @@ public enum CostType implements Cost {
 	 *
 	 * @param dis the input stream
 	 * @return the CostType
+	 * @throws IOException if there is an error reading the file
 	 */
 	public static CostType fromString(DataInputStream dis) throws IOException {
 		return valueOf(dis.readUTF());
@@ -176,6 +183,7 @@ public enum CostType implements Cost {
 	 * Exports the CostType.
 	 *
 	 * @param dos the output stream
+	 * @throws IOException if there is an error writing to the file
 	 */
 	public void export(DataOutputStream dos) throws IOException {
 		dos.writeUTF(toString());

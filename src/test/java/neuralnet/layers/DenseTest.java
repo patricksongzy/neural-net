@@ -32,7 +32,7 @@ class DenseTest {
 		Model model = new Model.Builder()
 			.add(new Dense.Builder().outputSize(5).activation(ActivationType.SIGMOID).initializer(new HeInitialization()).build())
 			.add(new Dense.Builder().outputSize(5).activation(ActivationType.SIGMOID).initializer(new HeInitialization()).build())
-			.inputDimensions(2).cost(CostType.CROSS_ENTROPY).updaterType(UpdaterType.AMSGRAD).build();
+			.inputDimensions(2).cost(CostType.MEAN_SQUARE_ERROR).updaterType(UpdaterType.AMSGRAD).build();
 		model.export("src/test/resources/ff-import-test.model");
 		model = new Model("src/test/resources/ff-import-test.model");
 

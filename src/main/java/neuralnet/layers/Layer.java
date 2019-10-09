@@ -65,6 +65,8 @@ public interface Layer {
 
 	/**
 	 * Updates a layer's parameters.
+	 *
+	 * @param length the length of the parameters
 	 */
 	void update(int length);
 
@@ -79,6 +81,7 @@ public interface Layer {
 	 * Exports the layer to an output stream.
 	 *
 	 * @param dos the output stream
+	 * @throws IOException if there is an error writing to the file
 	 */
 	void export(DataOutputStream dos) throws IOException;
 
