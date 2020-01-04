@@ -5,6 +5,7 @@ import neuralnet.activations.Activation;
 import neuralnet.activations.ActivationType;
 import neuralnet.costs.Cost;
 import neuralnet.initializers.Initializer;
+import neuralnet.layers.graph.Node;
 import neuralnet.optimizers.Updater;
 import neuralnet.optimizers.UpdaterType;
 import org.jocl.blast.CLBlastTranspose;
@@ -16,7 +17,7 @@ import java.util.Arrays;
 import java.util.LinkedList;
 import java.util.Objects;
 
-public class GRU implements Layer {
+public class GRU extends Layer {
 	private Mode mode = Mode.TRAIN;
 
 	private int batchSize;
@@ -45,8 +46,10 @@ public class GRU implements Layer {
 	private Updater[] biasUpdaters;
 	private Activation hiddenActivation, activation;
 
-	private GRU(int outputSize, Initializer initializer, ActivationType hiddenActivation,
+	private GRU(Node[] children, int outputSize, Initializer initializer, ActivationType hiddenActivation,
 				ActivationType activation) {
+		super(children);
+
 		Objects.requireNonNull(initializer);
 		Objects.requireNonNull(activation);
 		Objects.requireNonNull(hiddenActivation);
@@ -268,10 +271,10 @@ public class GRU implements Layer {
 			System.arraycopy(input, inputSize * b, xh, outputSize + (inputSize + outputSize) * b, inputSize);
 		}
 
-		z = GPU.sgemm(CLBlastTranspose.CLBlastTransposeNo, CLBlastTranspose.CLBlastTransposeYes, batchSize,
-			outputSize, inputSize + outputSize, xh, inputSize + outputSize, wz, inputSize + outputSize, z, outputSize);
-		r = GPU.sgemm(CLBlastTranspose.CLBlastTransposeNo, CLBlastTranspose.CLBlastTransposeYes, batchSize,
-			outputSize, inputSize + outputSize, xh, inputSize + outputSize, wr, inputSize + outputSize, r, outputSize);
+		z = GPU.sgemm(CLBlastTranspose.CLBlastTransposeNo, CLBlastTranspose.CLBlastTransposeNo, batchSize,
+			outputSize, inputSize + outputSize, xh, inputSize + outputSize, wzT, outputSize, z, outputSize);
+		r = GPU.sgemm(CLBlastTranspose.CLBlastTransposeNo, CLBlastTranspose.CLBlastTransposeNo, batchSize,
+			outputSize, inputSize + outputSize, xh, inputSize + outputSize, wrT, outputSize, r, outputSize);
 
 		hiddenActivation.activation(z, batchSize);
 		hiddenActivation.activation(r, batchSize);
@@ -285,8 +288,8 @@ public class GRU implements Layer {
 			System.arraycopy(input, inputSize * b, xrh, outputSize + (inputSize + outputSize) * b, inputSize);
 		}
 
-		hc = GPU.sgemm(CLBlastTranspose.CLBlastTransposeNo, CLBlastTranspose.CLBlastTransposeYes, batchSize,
-			outputSize, inputSize + outputSize, xrh, inputSize + outputSize, wh, inputSize + outputSize, hc, outputSize);
+		hc = GPU.sgemm(CLBlastTranspose.CLBlastTransposeNo, CLBlastTranspose.CLBlastTransposeNo, batchSize,
+			outputSize, inputSize + outputSize, xrh, inputSize + outputSize, whT, outputSize, hc, outputSize);
 		activation.activation(hc, batchSize);
 
 		for (int b = 0; b < batchSize; b++) {
@@ -447,12 +450,14 @@ public class GRU implements Layer {
 
 	@SuppressWarnings({"unused", "WeakerAccess"})
 	public static class Builder {
+		private Node[] children;
 		private int hiddenSize;
 		private Initializer initializer;
 		private ActivationType hiddenActivation;
 		private ActivationType activation;
 
-		public Builder() {
+		public Builder(Node... children) {
+			this.children = children;
 			hiddenActivation = ActivationType.SIGMOID;
 			activation = ActivationType.TANH;
 		}
@@ -477,7 +482,7 @@ public class GRU implements Layer {
 		}
 
 		public GRU build() {
-			return new GRU(hiddenSize, initializer, hiddenActivation, activation);
+			return new GRU(children, hiddenSize, initializer, hiddenActivation, activation);
 		}
 	}
 }

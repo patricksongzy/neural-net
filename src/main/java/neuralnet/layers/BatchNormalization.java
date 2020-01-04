@@ -4,6 +4,7 @@ import neuralnet.activations.Activation;
 import neuralnet.activations.ActivationType;
 import neuralnet.costs.Cost;
 import neuralnet.initializers.Initializer;
+import neuralnet.layers.graph.Node;
 import neuralnet.optimizers.UpdaterType;
 
 import java.io.DataInputStream;
@@ -13,7 +14,7 @@ import java.util.Objects;
 import java.util.stream.IntStream;
 
 @SuppressWarnings("FieldCanBeLocal")
-public class BatchNormalization implements Layer {
+public class BatchNormalization extends Layer {
 	private Mode mode;
 
 	private int batchSize;
@@ -27,7 +28,9 @@ public class BatchNormalization implements Layer {
 	private Activation activation;
 	private Initializer initializer;
 
-	private BatchNormalization(float epsilon, Initializer initializer, ActivationType activationType) {
+	private BatchNormalization(Node[] children, float epsilon, Initializer initializer, ActivationType activationType) {
+		super(children);
+
 		Objects.requireNonNull(initializer);
 		Objects.requireNonNull(activationType);
 
@@ -203,13 +206,15 @@ public class BatchNormalization implements Layer {
 	/**
 	 * Builder for BatchNormalization layers.
 	 */
-	@SuppressWarnings({"unused", "WeakerAccess"})
+	@SuppressWarnings("unused")
 	public static class Builder {
+		private Node[] children;
 		private float epsilon;
 		private Initializer initializer;
 		private ActivationType activationType;
 
-		public Builder() {
+		public Builder(Node... children) {
+			this.children = children;
 			epsilon = 1e-5f;
 			activationType = ActivationType.IDENTITY;
 		}
@@ -230,7 +235,7 @@ public class BatchNormalization implements Layer {
 		}
 
 		public BatchNormalization build() {
-			return new BatchNormalization(epsilon, initializer, activationType);
+			return new BatchNormalization(children, epsilon, initializer, activationType);
 		}
 	}
 }

@@ -3,6 +3,7 @@ package neuralnet.layers;
 import neuralnet.activations.ActivationType;
 import neuralnet.costs.Cost;
 import neuralnet.initializers.Initializer;
+import neuralnet.layers.graph.Node;
 import neuralnet.optimizers.UpdaterType;
 
 import java.io.DataInputStream;
@@ -11,7 +12,7 @@ import java.io.IOException;
 import java.util.LinkedList;
 import java.util.Objects;
 
-public class Inception implements Layer {
+public class Inception extends Layer {
 	private int batchSize;
 	private int depth, height, width;
 	private int[] filterAmounts;
@@ -21,7 +22,9 @@ public class Inception implements Layer {
 	private Layer[] bottleneck;
 	private Layer[] conv;
 
-	private Inception(LinkedList<Integer> filterAmounts, Initializer initializer) {
+	private Inception(Node[] children, LinkedList<Integer> filterAmounts, Initializer initializer) {
+		super(children);
+
 		if (filterAmounts.size() != 6)
 			throw new IllegalArgumentException("Filter size lengths not correct");
 		Objects.requireNonNull(filterAmounts);
@@ -256,10 +259,15 @@ public class Inception implements Layer {
 	/**
 	 * Builder for Inception layers.
 	 */
-	@SuppressWarnings({"unused", "WeakerAccess"})
+	@SuppressWarnings("unused")
 	public static class Builder {
+		private Node[] children;
 		private Initializer initializer;
 		private LinkedList<Integer> filterAmounts = new LinkedList<>();
+
+		public Builder(Node... children) {
+			this.children = children;
+		}
 
 		public Builder filterAmount(int... filterAmounts) {
 			for (int value : filterAmounts)
@@ -273,7 +281,7 @@ public class Inception implements Layer {
 		}
 
 		public Inception build() {
-			return new Inception(filterAmounts, initializer);
+			return new Inception(children, filterAmounts, initializer);
 		}
 	}
 }

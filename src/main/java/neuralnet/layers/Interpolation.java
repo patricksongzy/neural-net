@@ -1,6 +1,7 @@
 package neuralnet.layers;
 
 import neuralnet.costs.Cost;
+import neuralnet.layers.graph.Node;
 import neuralnet.optimizers.UpdaterType;
 
 import java.io.DataInputStream;
@@ -8,14 +9,16 @@ import java.io.DataOutputStream;
 import java.io.IOException;
 
 @SuppressWarnings("FieldCanBeLocal")
-public class Interpolation implements Layer {
+public class Interpolation extends Layer {
 	private int zoomFactor;
 	private int batchSize;
 	private int height, width, depth;
 	private int outputHeight, outputWidth;
 	private float[] output;
 
-	private Interpolation(int outputHeight, int outputWidth) {
+	private Interpolation(Node[] children, int outputHeight, int outputWidth) {
+		super(children);
+
 		this.outputHeight = outputHeight;
 		this.outputWidth = outputWidth;
 	}
@@ -147,8 +150,13 @@ public class Interpolation implements Layer {
 	 */
 	@SuppressWarnings({"unused", "WeakerAccess"})
 	public static class Builder {
+		private Node[] children;
 		private int zoomFactor;
 		private int outputHeight, outputWidth;
+
+		public Builder(Node... children) {
+			this.children = children;
+		}
 
 		public Builder zoomFactor(int zoomFactor) {
 			this.zoomFactor = zoomFactor;
@@ -168,7 +176,7 @@ public class Interpolation implements Layer {
 		public Interpolation build() {
 			if (outputHeight == 0 || outputWidth == 0)
 				return new Interpolation(zoomFactor);
-			return new Interpolation(outputHeight, outputWidth);
+			return new Interpolation(children, outputHeight, outputWidth);
 		}
 	}
 }

@@ -12,7 +12,7 @@ class GRUTest {
 	@Test
 	void gradientTest() {
 		// just a regular test
-		Model model = new Model.Builder()
+		Model model = new Model.Builder(true)
 			.add(new GRU.Builder().hiddenSize(5).initializer(new HeInitialization()).build())
 			.add(new GRU.Builder().hiddenSize(5).initializer(new HeInitialization()).build())
 			.inputDimensions(2).cost(CostType.MEAN_SQUARE_ERROR).updaterType(UpdaterType.ADAM).build();

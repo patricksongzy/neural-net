@@ -3,6 +3,7 @@ package neuralnet.layers;
 import neuralnet.activations.ActivationType;
 import neuralnet.costs.Cost;
 import neuralnet.initializers.Initializer;
+import neuralnet.layers.graph.Node;
 import neuralnet.optimizers.UpdaterType;
 
 import java.io.DataInputStream;
@@ -11,7 +12,7 @@ import java.io.IOException;
 import java.util.Objects;
 
 @SuppressWarnings("FieldCanBeLocal")
-public class Residual implements Layer {
+public class Residual extends Layer {
 	private int batchSize;
 	private int pad;
 	private int stride;
@@ -25,7 +26,9 @@ public class Residual implements Layer {
 	private Layer[] branch1;
 	private Layer[] branch2;
 
-	private Residual(int filterAmount, int outputDepth, int pad, int stride, Initializer initializer) {
+	private Residual(Node[] children, int filterAmount, int outputDepth, int pad, int stride, Initializer initializer) {
+		super(children);
+
 		Objects.requireNonNull(initializer);
 
 		this.filterAmount = filterAmount;
@@ -215,13 +218,15 @@ public class Residual implements Layer {
 
 	@SuppressWarnings({"unused", "WeakerAccess"})
 	public static class Builder {
+		private Node[] children;
 		private int filterAmount;
 		private int outputDepth;
 		private int pad;
 		private int stride;
 		private Initializer initializer;
 
-		public Builder() {
+		public Builder(Node... children) {
+			this.children = children;
 			outputDepth = -1;
 			pad = 1;
 			stride = 1;
@@ -253,7 +258,7 @@ public class Residual implements Layer {
 		}
 
 		public Residual build() {
-			return new Residual(filterAmount, outputDepth, pad, stride, initializer);
+			return new Residual(children, filterAmount, outputDepth, pad, stride, initializer);
 		}
 	}
 }

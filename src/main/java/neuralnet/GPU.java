@@ -26,7 +26,7 @@ public class GPU {
 	 * @param platformIndex the platform index
 	 * @param deviceIndex   the device index
 	 */
-	@SuppressWarnings("unused, WeakerAccess")
+	@SuppressWarnings("unused")
 	public static void init(int platformIndex, int deviceIndex) {
 		if (commandQueue != null)
 			clReleaseCommandQueue(commandQueue);
@@ -230,9 +230,9 @@ public class GPU {
 	}
 
 	private static void getPlatformName(cl_platform_id platform) {
-		long size[] = new long[1];
+		long[] size = new long[1];
 		clGetPlatformInfo(platform, CL.CL_PLATFORM_NAME, 0, null, size);
-		byte buffer[] = new byte[(int) size[0]];
+		byte[] buffer = new byte[(int) size[0]];
 		clGetPlatformInfo(platform, CL.CL_PLATFORM_NAME, buffer.length, Pointer.to(buffer), null);
 
 		// Create a string from the buffer (excluding the trailing \0 byte)
@@ -240,9 +240,9 @@ public class GPU {
 	}
 
 	private static void getDeviceName(cl_device_id device) {
-		long size[] = new long[1];
+		long[] size = new long[1];
 		clGetDeviceInfo(device, CL.CL_DEVICE_NAME, 0, null, size);
-		byte buffer[] = new byte[(int) size[0]];
+		byte[] buffer = new byte[(int) size[0]];
 		clGetDeviceInfo(device, CL.CL_DEVICE_NAME, buffer.length, Pointer.to(buffer), null);
 
 		// Create a string from the buffer (excluding the trailing \0 byte)

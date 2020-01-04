@@ -1,6 +1,7 @@
 package neuralnet.layers;
 
 import neuralnet.costs.Cost;
+import neuralnet.layers.graph.Node;
 import neuralnet.optimizers.UpdaterType;
 
 import java.io.DataInputStream;
@@ -8,14 +9,16 @@ import java.io.DataOutputStream;
 import java.io.IOException;
 import java.util.stream.IntStream;
 
-public class LRN implements Layer {
+public class LRN extends Layer {
 	private int batchSize;
 	private int n;
 	private float k, alpha, beta;
 	private int depth, height, width;
 	private float[] output;
 
-	private LRN(int n, float k, float alpha, float beta) {
+	private LRN(Node[] children, int n, float k, float alpha, float beta) {
+		super(children);
+
 		this.n = n;
 		this.k = k;
 		this.alpha = alpha;
@@ -108,10 +111,15 @@ public class LRN implements Layer {
 	/**
 	 * Builder for LRN layers.
 	 */
-	@SuppressWarnings({"unused", "WeakerAccess"})
+	@SuppressWarnings("unused")
 	public static class Builder {
+		private Node[] children;
 		private int n;
 		private float alpha, beta, k;
+
+		public Builder(Node... children) {
+			this.children = children;
+		}
 
 		public Builder n(int n) {
 			this.n = n;
@@ -134,7 +142,7 @@ public class LRN implements Layer {
 		}
 
 		public LRN build() {
-			return new LRN(n, k, alpha, beta);
+			return new LRN(children, n, k, alpha, beta);
 		}
 	}
 }

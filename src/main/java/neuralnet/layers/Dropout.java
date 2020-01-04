@@ -1,6 +1,7 @@
 package neuralnet.layers;
 
 import neuralnet.costs.Cost;
+import neuralnet.layers.graph.Node;
 import neuralnet.optimizers.UpdaterType;
 
 import java.io.DataInputStream;
@@ -12,7 +13,7 @@ import java.util.stream.IntStream;
 /**
  * The Dropout layer drops certain connections to reduce over-fitting during training. During evaluation, dropout layers do not take effect.
  */
-public class Dropout implements Layer {
+public class Dropout extends Layer {
 	private Mode mode = Mode.TRAIN;
 
 	private int batchSize;
@@ -21,7 +22,9 @@ public class Dropout implements Layer {
 	private float dropout;
 	private float[] output;
 
-	private Dropout(float dropout) {
+	private Dropout(Node[] children, float dropout) {
+		super(children);
+
 		if (dropout < 0 || dropout >= 1)
 			throw new IllegalArgumentException("Dropout must be > 0 and < 1.");
 
@@ -103,9 +106,14 @@ public class Dropout implements Layer {
 	/**
 	 * Builder for Dropout layers.
 	 */
-	@SuppressWarnings({"unused", "WeakerAccess"})
+	@SuppressWarnings("unused")
 	public static class Builder {
+		private Node[] children;
 		private float dropout = 0.5f;
+
+		public Builder(Node... children) {
+			this.children = children;
+		}
 
 		/**
 		 * The dropout is the chance that a connection will be dropped, during training.
@@ -124,7 +132,7 @@ public class Dropout implements Layer {
 		 * @return the builder
 		 */
 		public Dropout build() {
-			return new Dropout(dropout);
+			return new Dropout(children, dropout);
 		}
 	}
 }

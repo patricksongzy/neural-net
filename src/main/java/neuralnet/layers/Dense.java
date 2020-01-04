@@ -4,6 +4,7 @@ import neuralnet.GPU;
 import neuralnet.activations.Activation;
 import neuralnet.costs.Cost;
 import neuralnet.initializers.Initializer;
+import neuralnet.layers.graph.Node;
 import neuralnet.optimizers.Updater;
 import neuralnet.optimizers.UpdaterType;
 import org.jocl.CL;
@@ -21,7 +22,7 @@ import java.util.Objects;
  * output is
  * then run through an activation function.
  */
-public class Dense implements Layer {
+public class Dense extends Layer {
 	private Mode mode;
 
 	private int batchSize;
@@ -36,6 +37,26 @@ public class Dense implements Layer {
 	private cl_mem weightBuffer;
 	private LinkedList<cl_mem> inputs = new LinkedList<>();
 	private LinkedList<float[]> outputs = new LinkedList<>();
+
+	private Dense(Node[] children, int outputSize, float temperature, Initializer initializer, Activation activation) {
+		super(children);
+
+		Objects.requireNonNull(initializer);
+		Objects.requireNonNull(activation);
+
+		if (activation.getType() != Activation.Type.SOFTMAX && temperature != 1) {
+			System.err.println("WARNING: Temperature is usually used with softmax.");
+
+			for (StackTraceElement element : Thread.currentThread().getStackTrace()) {
+				System.err.println(element);
+			}
+		}
+
+		this.outputSize = outputSize;
+		this.temperature = temperature;
+		this.initializer = initializer;
+		this.activation = activation;
+	}
 
 	/**
 	 * Initializes a Dense layer neural network from a file.
@@ -66,24 +87,6 @@ public class Dense implements Layer {
 				weights[index] = dis.readFloat();
 			}
 		}
-	}
-
-	private Dense(int outputSize, float temperature, Initializer initializer, Activation activation) {
-		Objects.requireNonNull(initializer);
-		Objects.requireNonNull(activation);
-
-		if (activation.getType() != Activation.Type.SOFTMAX && temperature != 1) {
-			System.err.println("WARNING: Temperature is usually used with softmax.");
-
-			for (StackTraceElement element : Thread.currentThread().getStackTrace()) {
-				System.err.println(element);
-			}
-		}
-
-		this.outputSize = outputSize;
-		this.temperature = temperature;
-		this.initializer = initializer;
-		this.activation = activation;
 	}
 
 	public void setMode(Mode mode) {
@@ -259,12 +262,14 @@ public class Dense implements Layer {
 	 */
 	@SuppressWarnings("unused")
 	public static class Builder {
+		private Node[] children;
 		private int outputSize;
 		private float temperature;
 		private Activation activation;
 		private Initializer initializer;
 
-		public Builder() {
+		public Builder(Node... children) {
+			this.children = children;
 			temperature = 1;
 		}
 
@@ -323,7 +328,7 @@ public class Dense implements Layer {
 		 * @return the layer
 		 */
 		public Dense build() {
-			return new Dense(outputSize, temperature, initializer, activation);
+			return new Dense(children, outputSize, temperature, initializer, activation);
 		}
 	}
 }

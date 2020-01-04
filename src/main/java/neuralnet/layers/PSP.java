@@ -3,6 +3,7 @@ package neuralnet.layers;
 import neuralnet.activations.ActivationType;
 import neuralnet.costs.Cost;
 import neuralnet.initializers.Initializer;
+import neuralnet.layers.graph.Node;
 import neuralnet.optimizers.UpdaterType;
 
 import java.io.DataInputStream;
@@ -12,7 +13,7 @@ import java.util.LinkedList;
 import java.util.Objects;
 
 @SuppressWarnings("FieldCanBeLocal")
-public class PSP implements Layer {
+public class PSP extends Layer {
 	private int batchSize;
 	private int depth, height, width;
 
@@ -26,7 +27,9 @@ public class PSP implements Layer {
 	private Layer[] branch3;
 	private Layer[] branch4;
 
-	private PSP(LinkedList<Integer> downsampleSizes, Initializer initializer) {
+	private PSP(Node[] children, LinkedList<Integer> downsampleSizes, Initializer initializer) {
+		super(children);
+
 		Objects.requireNonNull(downsampleSizes);
 		Objects.requireNonNull(initializer);
 
@@ -237,8 +240,13 @@ public class PSP implements Layer {
 	 */
 	@SuppressWarnings("unused")
 	public static class Builder {
+		private Node[] children;
 		private LinkedList<Integer> downsampleSizes = new LinkedList<>();
 		private Initializer initializer;
+
+		public Builder(Node... children) {
+			this.children = children;
+		}
 
 		public Builder downsampleSizes(int... downsampleSizes) {
 			for (int value : downsampleSizes)
@@ -252,7 +260,7 @@ public class PSP implements Layer {
 		}
 
 		public PSP build() {
-			return new PSP(downsampleSizes, initializer);
+			return new PSP(children, downsampleSizes, initializer);
 		}
 	}
 }

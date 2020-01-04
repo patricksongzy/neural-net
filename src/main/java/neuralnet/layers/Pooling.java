@@ -1,6 +1,7 @@
 package neuralnet.layers;
 
 import neuralnet.costs.Cost;
+import neuralnet.layers.graph.Node;
 import neuralnet.optimizers.UpdaterType;
 
 import java.io.DataInputStream;
@@ -14,7 +15,7 @@ import java.util.stream.IntStream;
  * upsampling is used, where the switches of the max pooling (the selected indices) are remembered, and used to place the deltas at such
  * locations.
  */
-public class Pooling implements Layer {
+public class Pooling extends Layer {
 	private final Mode mode;
 
 	private int batchSize;
@@ -26,8 +27,10 @@ public class Pooling implements Layer {
 	private boolean[] switches;
 	private float[] output;
 
-	private Pooling(Mode mode, int downsampleSize, int downsampleStride, int pad) {
-		if (downsampleSize <= 0 && downsampleStride <= 0)
+	private Pooling(Node[] children, Mode mode, int downsampleSize, int downsampleStride, int pad) {
+		super(children);
+
+		if (downsampleSize <= 0 || downsampleStride <= 0)
 			throw new IllegalArgumentException("Invalid pooling dimensions.");
 		if (pad < 0)
 			throw new IllegalArgumentException("Invalid pad dimensions.");
@@ -255,11 +258,13 @@ public class Pooling implements Layer {
 
 	@SuppressWarnings("unused")
 	public static class Builder {
+		private Node[] children;
 		private Mode mode;
 		private int pad;
 		private int downsampleSize, downsampleStride;
 
-		public Builder() {
+		public Builder(Node... children) {
+			this.children = children;
 			mode = Mode.MAX;
 		}
 
@@ -284,7 +289,7 @@ public class Pooling implements Layer {
 		}
 
 		public Pooling build() {
-			return new Pooling(mode, downsampleSize, downsampleStride, pad);
+			return new Pooling(children, mode, downsampleSize, downsampleStride, pad);
 		}
 	}
 }

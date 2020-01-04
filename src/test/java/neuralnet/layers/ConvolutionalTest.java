@@ -188,7 +188,7 @@ class ConvolutionalTest {
 
 	@Test
 	void gradientTest() {
-		Model model = new Model.Builder().add(
+		Model model = new Model.Builder(true).add(
 			new Convolutional.Builder().filterAmount(8).filterSize(2).initializer(new HeInitialization())
 				.pad(1).stride(2).activationType(ActivationType.RELU).build()
 		).add(

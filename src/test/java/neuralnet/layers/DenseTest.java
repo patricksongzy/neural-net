@@ -29,7 +29,7 @@ class DenseTest {
 	@Test
 	void gradientTest() {
 		// just a regular test
-		Model model = new Model.Builder()
+		Model model = new Model.Builder(true)
 			.add(new Dense.Builder().outputSize(5).activation(ActivationType.SIGMOID).initializer(new HeInitialization()).build())
 			.add(new Dense.Builder().outputSize(5).activation(ActivationType.SIGMOID).initializer(new HeInitialization()).build())
 			.inputDimensions(2).cost(CostType.MEAN_SQUARE_ERROR).updaterType(UpdaterType.AMSGRAD).build();

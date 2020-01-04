@@ -5,6 +5,7 @@ import neuralnet.costs.Cost;
 import neuralnet.costs.CostType;
 import neuralnet.layers.Layer;
 import neuralnet.layers.LayerType;
+import neuralnet.layers.graph.Node;
 import neuralnet.optimizers.UpdaterType;
 import neuralnet.schedules.Schedule;
 import plot.Plot;
@@ -19,11 +20,11 @@ import java.util.concurrent.TimeUnit;
 /**
  * Models represent neural network models. They forward and back propagate layers.
  */
-@SuppressWarnings("unused")
-public class Model {
+@SuppressWarnings("unused") public class Model {
 	private static final int CORES = Runtime.getRuntime().availableProcessors();
-	private static final ThreadPoolExecutor ES = new ThreadPoolExecutor(CORES, CORES, 0L, TimeUnit.MILLISECONDS,
-		new LinkedBlockingQueue<>(), new ThreadPoolExecutor.CallerRunsPolicy());
+	private static final ThreadPoolExecutor ES =
+		new ThreadPoolExecutor(CORES, CORES, 0L, TimeUnit.MILLISECONDS, new LinkedBlockingQueue<>(),
+			new ThreadPoolExecutor.CallerRunsPolicy());
 
 	static {
 		Runtime.getRuntime().addShutdownHook(new Thread(() -> {
@@ -39,31 +40,33 @@ public class Model {
 	private int inputSize;
 	private UpdaterType updaterType;
 
-	// TODO: Implement non-sequential
+	private Layer[] inputLayers;
 	private Layer[] layers;
 	private Schedule schedule;
 	private Cost cost;
 
-	private Model(Layer[] layers, CostType costType, UpdaterType updaterType, int[] inputDimensions) {
+	private Model(Layer[] layers, boolean areLayersSequential, CostType costType, UpdaterType updaterType, int[] inputDimensions) {
 		if (layers.length <= 0)
 			throw new IllegalArgumentException("Invalid layer amount.");
+
 		Objects.requireNonNull(costType);
 		Objects.requireNonNull(updaterType);
 		Objects.requireNonNull(inputDimensions);
 
-		this.layers = layers;
+		this.layers = areLayersSequential ? layers : sortLayers(layers);
 
 		this.schedule = new Schedule() {
-			public void init(UpdaterType updaterType, int batchSize, int keyAmount) {
+			@Override public void endEpoch(int i) {
 			}
 
-			public void increment(int s) {
+			@Override public void increment(int s) {
 			}
 
-			public void endEpoch(int i) {
+			@Override public void init(UpdaterType updaterType, int batchSize, int keyAmount) {
+
 			}
 
-			public void step() {
+			@Override public void step() {
 			}
 		};
 
@@ -74,12 +77,27 @@ public class Model {
 		for (int i = 1; i < inputDimensions.length; i++)
 			inputSize *= inputDimensions[i];
 
-		layers[0].setDimensions(inputDimensions, updaterType); // setting input dimensions
+		this.layers[0].setDimensions(inputDimensions, updaterType); // setting input dimensions
 
-		// each layer's output is the next layer's input
-		for (int i = 1; i < layers.length; i++) {
-			layers[i].setDimensions(layers[i - 1].getOutputDimensions(), updaterType);
+		if (areLayersSequential) {
+			inputLayers = new Layer[] { this.layers[0] };
+
+			// each layer's output is the next layer's input
+			for (int i = 1; i < layers.length; i++) {
+				this.layers[i].setChildren(new Node[] { this.layers[i - 1] });
+				this.layers[i].setDimensions(this.layers[i - 1].getOutputDimensions(), updaterType);
+			}
+		} else {
+			inputLayers = Arrays.stream(this.layers).filter(layer -> layer.getChildren().length == 0).toArray(Layer[]::new);
+			propagateDimensionsConsumers(this.layers[0]);
 		}
+	}
+
+	private void propagateDimensionsConsumers(Layer layer) {
+		layer.getConsumers().forEach(consumer -> {
+			((Layer) consumer).setDimensions(layer.getOutputDimensions(), updaterType);
+			propagateDimensionsConsumers((Layer) consumer);
+		});
 	}
 
 	/**
@@ -133,21 +151,172 @@ public class Model {
 		}
 	}
 
-	public void setSchedule(Schedule schedule) {
-		Objects.requireNonNull(schedule);
-		this.schedule = schedule;
+	/**
+	 * Backpropagates layers, by calculating gradients.
+	 *
+	 * @param targets the targets
+	 */
+	public void backward(float[] targets) {
+		// calculating the derivative of cost first
+		float[] delta = layers[layers.length - 1].backward(cost, targets, layers.length > 1);
+
+		// looping through layers backwards and feeding outputted delta as inputs.
+		for (int i = layers.length - 2; i >= 0; i--)
+			delta = layers[i].backward(delta, i > 0);
 	}
 
-	public int[] getOutputDimensions() {
-		return layers[layers.length - 1].getOutputDimensions();
+	/**
+	 * Back propagates recurrent layers in an efficient manner.
+	 *
+	 * @param targets the targets
+	 */
+	public void backward(float[][] targets) {
+		float[][] delta = new float[targets.length][];
+
+		List<Callable<Void>> tasks = new ArrayList<>();
+		for (int i = targets.length - 1; i > -layers.length; i--) {
+			if (i >= 0) {
+				final int index = i;
+				tasks.add(() -> {
+					delta[index] = layers[layers.length - 1].backward(cost, targets[index], layers.length > 1);
+					return null;
+				});
+			}
+
+			for (int j = i + 1, k = layers.length - 2; j < targets.length && k >= 0; j++, k--) {
+				final int index = j;
+				final int current = k;
+
+				if (j >= 0) {
+					tasks.add(() -> {
+						delta[index] = layers[current].backward(delta[index], current > 0);
+						return null;
+					});
+				}
+			}
+
+			try {
+				ES.invokeAll(tasks);
+			} catch (InterruptedException e) {
+				e.printStackTrace();
+			}
+
+			tasks.clear();
+		}
 	}
 
-	public int getLayerAmount() {
-		return layers.length;
+	@SuppressWarnings("Duplicates")
+	private boolean checkParameters(float[] parameters, float[] gradient, float[] input, float[] target, int batchSize) {
+		double epsilon = 1e-3;
+		double numerator = 0, denominator = 0;
+
+		float[] numericalGradient = new float[parameters.length];
+
+		for (int i = 0; i < parameters.length; i++) {
+			parameters[i] += epsilon;
+
+			float[] y = forward(input, batchSize);
+
+			float plus = cost.cost(y, target);
+
+			parameters[i] -= 2 * epsilon;
+
+			y = forward(input, batchSize);
+
+			float minus = cost.cost(y, target);
+
+			parameters[i] += epsilon;
+
+			numericalGradient[i] += (plus - minus) / (2 * epsilon);
+
+			System.out.println(gradient[i] + "\t" + numericalGradient[i]);
+			numerator += Math.pow(Math.abs(gradient[i] - numericalGradient[i]), 2);
+			denominator += Math.pow(Math.abs(gradient[i] + numericalGradient[i]), 2);
+		}
+
+		numerator = Math.sqrt(numerator);
+		denominator = Math.sqrt(denominator);
+
+		System.out.println(numerator / denominator + "\n---------------------");
+		if (Double.isNaN(numerator / denominator))
+			return true;
+
+		// gradient check doesn't mean much with FP32
+		return (numerator / denominator) < 0.2;
 	}
 
-	public Layer getLayer(int index) {
-		return layers[index];
+	@SuppressWarnings("Duplicates")
+	private boolean checkParameters(float[] parameters, float[] gradient, float[][] input, float[][] target, int batchSize) {
+		double epsilon = 1e-3;
+		double numerator = 0, denominator = 0;
+
+		float[] numericalGradient = new float[parameters.length];
+
+		for (int i = 0; i < parameters.length; i++) {
+			parameters[i] += epsilon;
+
+			setMode(Layer.Mode.GRADIENT_CHECK);
+			float[][] y = forward(input, batchSize);
+
+			float plus = 0;
+			for (int j = 0; j < y.length; j++)
+				plus += cost.cost(y[j], target[j]);
+
+			parameters[i] -= 2 * epsilon;
+
+			setMode(Layer.Mode.GRADIENT_CHECK);
+			y = forward(input, batchSize);
+
+			float minus = 0;
+			for (int j = 0; j < y.length; j++)
+				minus += cost.cost(y[j], target[j]);
+
+			parameters[i] += epsilon;
+
+			numericalGradient[i] += (plus - minus) / (2 * epsilon);
+
+			System.out.println(gradient[i] + "\t" + numericalGradient[i]);
+			numerator += Math.pow(Math.abs(gradient[i] - numericalGradient[i]), 2);
+			denominator += Math.pow(Math.abs(gradient[i] + numericalGradient[i]), 2);
+		}
+
+		numerator = Math.sqrt(numerator);
+		denominator = Math.sqrt(denominator);
+
+		System.out.println(numerator / denominator + "\n---------------------");
+		if (Double.isNaN(numerator / denominator))
+			return true;
+
+		// gradient check doesn't mean much with FP32
+		return (numerator / denominator) < 0.2;
+	}
+
+	/**
+	 * Exports model to file.
+	 *
+	 * @param file the file
+	 */
+	public void export(String file) {
+		try (DataOutputStream dos = new DataOutputStream(new BufferedOutputStream(new FileOutputStream(file, false), 16384))) {
+			// exporting layer amount
+			dos.writeInt(layers.length);
+			dos.writeInt(inputSize);
+
+			updaterType.export(dos);
+
+			// exporting layers
+			for (Layer layer : layers) {
+				layer.getType().export(dos);
+				layer.export(dos);
+			}
+
+			// exporting cost
+			cost.getType().export(dos);
+
+			System.out.println("Exported to: " + file);
+		} catch (IOException e) {
+			e.printStackTrace();
+		}
 	}
 
 	/**
@@ -166,41 +335,153 @@ public class Model {
 	}
 
 	/**
-	 * Backpropagates layers, by calculating gradients.
+	 * Forward propagates recurrent layers in an efficient manner.
 	 *
-	 * @param targets the targets
+	 * @param x         the input
+	 * @param batchSize the batch size
+	 * @return the output
 	 */
-	public void backward(float[] targets) {
-		// calculating the derivative of cost first
-		float[] delta = layers[layers.length - 1].backward(cost, targets, layers.length > 1);
+	public float[][] forward(float[][] x, int batchSize) {
+		float[][] output = new float[x.length][];
+		for (int i = 0; i < x.length; i++) {
+			output[i] = new float[x[i].length];
+			System.arraycopy(x[i], 0, output[i], 0, x[i].length);
+		}
 
-		// looping through layers backwards and feeding outputted delta as inputs.
-		for (int i = layers.length - 2; i >= 0; i--)
-			delta = layers[i].backward(delta, i > 0);
+		List<Callable<Void>> tasks = new ArrayList<>();
+
+		for (int i = 0; i < output.length + layers.length - 1; i++) {
+			for (int j = 0; j < layers.length && (i - j) >= 0; j++) {
+				if (i - j < output.length) {
+					final int index = i;
+					final int current = j;
+
+					tasks.add(() -> {
+						output[index - current] = layers[current].forward(output[index - current], batchSize);
+						return null;
+					});
+				}
+			}
+
+			try {
+				ES.invokeAll(tasks);
+			} catch (InterruptedException e) {
+				e.printStackTrace();
+			}
+
+			tasks.clear();
+		}
+
+		return output;
+	}
+
+	public Layer getLayer(int index) {
+		return layers[index];
+	}
+
+	public int getLayerAmount() {
+		return layers.length;
+	}
+
+	public int[] getOutputDimensions() {
+		return layers[layers.length - 1].getOutputDimensions();
 	}
 
 	/**
-	 * Updates the parameters of all layers after backpropagation.
+	 * Gradient checks validate that the implementation of the back propagation algorithm is correct. It does so by comparing the gradients
+	 * with numerical gradients.
 	 *
-	 * @param length the length of the parameters
+	 * @param input     the input
+	 * @param target    the target
+	 * @param batchSize the batch size
+	 * @return whether the gradient check passes
 	 */
-	public void update(int length) {
-		List<Callable<Void>> tasks = new ArrayList<>();
+	@SuppressWarnings("Duplicates") public boolean gradientCheck(float[] input, float[] target, int batchSize) {
+		setMode(Layer.Mode.GRADIENT_CHECK);
 
+		forward(input, batchSize);
+		backward(target);
+
+		boolean pass = true;
 		for (Layer layer : layers) {
-			tasks.add(() -> {
-				layer.update(length);
-				return null;
-			});
+			for (float[][] parameters : layer.getParameters()) {
+				if (!checkParameters(parameters[0], parameters[1], input, target, batchSize)) {
+					pass = false;
+					System.err.println("Fail\n\n");
+				}
+			}
 		}
 
-		try {
-			ES.invokeAll(tasks);
-		} catch (InterruptedException e) {
-			e.printStackTrace();
+		System.out.println("pass: " + pass);
+
+		return pass;
+	}
+
+	/**
+	 * Gradient checks validate that the implementation of the back propagation algorithm is correct. It does so by comparing the gradients
+	 * with numerical gradients.
+	 *
+	 * @param input     the input
+	 * @param target    the target
+	 * @param batchSize the batch size
+	 * @return whether the gradient check passes
+	 */
+	@SuppressWarnings("Duplicates") public boolean gradientCheck(float[][] input, float[][] target, int batchSize) {
+		setMode(Layer.Mode.GRADIENT_CHECK);
+
+		forward(input, batchSize);
+		backward(target);
+
+		boolean pass = true;
+		for (Layer layer : layers) {
+			for (float[][] parameters : layer.getParameters()) {
+				if (!checkParameters(parameters[0], parameters[1], input, target, batchSize)) {
+					pass = false;
+					System.err.println("Fail\n\n");
+				}
+			}
 		}
 
-		tasks.clear();
+		System.out.println("pass: " + pass);
+
+		return pass;
+	}
+
+	private void populateDiscoverable(Layer layer, Set<Layer> discoverable) {
+		discoverable.add(layer);
+		Arrays.stream(layer.getChildren()).forEach(child -> populateDiscoverable((Layer) child, discoverable));
+	}
+
+	/**
+	 * Sets the mode on each layer.
+	 *
+	 * @param mode the mode
+	 */
+	public void setMode(Layer.Mode mode) {
+		for (Layer layer : layers)
+			layer.setMode(mode);
+	}
+
+	public void setSchedule(Schedule schedule) {
+		Objects.requireNonNull(schedule);
+		this.schedule = schedule;
+	}
+
+	private Layer[] sortLayers(Layer... outputLayers) {
+		Deque<Layer> topological = new ArrayDeque<>();
+
+		Set<Layer> discoverable = new HashSet<>();
+		Arrays.stream(outputLayers).forEach(outputLayer -> populateDiscoverable(outputLayer, discoverable));
+
+		while (!discoverable.isEmpty()) {
+			visit(discoverable.iterator().next(), discoverable, topological);
+		}
+
+		Map<Layer, Integer> distances = new HashMap<>();
+		topological.forEach(layer -> distances.put(layer,
+			layer.getConsumers().stream().mapToInt(consumer -> distances.getOrDefault((Layer) consumer, 1) - 1).min().orElse(0)));
+
+		return distances.entrySet().stream().sorted(Map.Entry.comparingByValue()).map(Map.Entry::getKey).toArray(Layer[]::new);
 	}
 
 	/**
@@ -212,8 +493,7 @@ public class Model {
 	 * @param checkpoint the amount of epochs to export
 	 * @param name       the exported model name
 	 */
-	@SuppressWarnings("Duplicates")
-	public void train(Map<float[], float[]> data, int batchSize, int epochs, int checkpoint, String name) {
+	@SuppressWarnings("Duplicates") public void train(Map<float[], float[]> data, int batchSize, int epochs, int checkpoint, String name) {
 		new Thread(() -> Application.launch(Plot.class, (String) null)).start();
 
 		// setting mode to training mode
@@ -328,7 +608,7 @@ public class Model {
 					float[][] inputs = new float[n][s * inputSize];
 					float[][] targets = new float[n][s];
 
-					for (int t = 0; t < n; t++ ) {
+					for (int t = 0; t < n; t++) {
 						for (int b = 0; b < s; b++) {
 							float[][] key = keys.get(b + j);
 							if (t + k < key.length) {
@@ -384,281 +664,56 @@ public class Model {
 	}
 
 	/**
-	 * Sets the mode on each layer.
+	 * Updates the parameters of all layers after backpropagation.
 	 *
-	 * @param mode the mode
+	 * @param length the length of the parameters
 	 */
-	public void setMode(Layer.Mode mode) {
-		for (Layer layer : layers)
-			layer.setMode(mode);
-	}
-
-	/**
-	 * Forward propagates recurrent layers in an efficient manner.
-	 *
-	 * @param x         the input
-	 * @param batchSize the batch size
-	 * @return the output
-	 */
-	public float[][] forward(float[][] x, int batchSize) {
-		float[][] output = new float[x.length][];
-		for (int i = 0; i < x.length; i++) {
-			output[i] = new float[x[i].length];
-			System.arraycopy(x[i], 0, output[i], 0, x[i].length);
-		}
-
+	public void update(int length) {
 		List<Callable<Void>> tasks = new ArrayList<>();
 
-		for (int i = 0; i < output.length + layers.length - 1; i++) {
-			for (int j = 0; j < layers.length && (i - j) >= 0; j++) {
-				if (i - j < output.length) {
-					final int index = i;
-					final int current = j;
-
-					tasks.add(() -> {
-						output[index - current] = layers[current].forward(output[index - current], batchSize);
-						return null;
-					});
-				}
-			}
-
-			try {
-				ES.invokeAll(tasks);
-			} catch (InterruptedException e) {
-				e.printStackTrace();
-			}
-
-			tasks.clear();
-		}
-
-		return output;
-	}
-
-	/**
-	 * Back propagates recurrent layers in an efficient manner.
-	 *
-	 * @param targets the targets
-	 */
-	public void backward(float[][] targets) {
-		float[][] delta = new float[targets.length][];
-
-		List<Callable<Void>> tasks = new ArrayList<>();
-		for (int i = targets.length - 1; i > -layers.length; i--) {
-			if (i >= 0) {
-				final int index = i;
-				tasks.add(() -> {
-					delta[index] = layers[layers.length - 1].backward(cost, targets[index], layers.length > 1);
-					return null;
-				});
-			}
-
-			for (int j = i + 1, k = layers.length - 2; j < targets.length && k >= 0; j++, k--) {
-				final int index = j;
-				final int current = k;
-
-				if (j >= 0) {
-					tasks.add(() -> {
-						delta[index] = layers[current].backward(delta[index], current > 0);
-						return null;
-					});
-				}
-			}
-
-			try {
-				ES.invokeAll(tasks);
-			} catch (InterruptedException e) {
-				e.printStackTrace();
-			}
-
-			tasks.clear();
-		}
-	}
-
-	/**
-	 * Gradient checks validate that the implementation of the back propagation algorithm is correct. It does so by comparing the gradients
-	 * with numerical gradients.
-	 *
-	 * @param input     the input
-	 * @param target    the target
-	 * @param batchSize the batch size
-	 * @return whether the gradient check passes
-	 */
-	@SuppressWarnings("Duplicates")
-	public boolean gradientCheck(float[] input, float[] target, int batchSize) {
-		setMode(Layer.Mode.GRADIENT_CHECK);
-
-		forward(input, batchSize);
-		backward(target);
-
-		boolean pass = true;
 		for (Layer layer : layers) {
-			for (float[][] parameters : layer.getParameters()) {
-				if (!checkParameters(parameters[0], parameters[1], input, target, batchSize)) {
-					pass = false;
-					System.err.println("Fail\n\n");
-				}
-			}
+			tasks.add(() -> {
+				layer.update(length);
+				return null;
+			});
 		}
 
-		System.out.println("pass: " + pass);
-
-		return pass;
-	}
-
-	@SuppressWarnings("Duplicates")
-	private boolean checkParameters(float[] parameters, float[] gradient, float[] input, float[] target, int batchSize) {
-		double epsilon = 1e-3;
-		double numerator = 0, denominator = 0;
-
-		float[] numericalGradient = new float[parameters.length];
-
-		for (int i = 0; i < parameters.length; i++) {
-			parameters[i] += epsilon;
-
-			float[] y = forward(input, batchSize);
-
-			float plus = cost.cost(y, target);
-
-			parameters[i] -= 2 * epsilon;
-
-			y = forward(input, batchSize);
-
-			float minus = cost.cost(y, target);
-
-			parameters[i] += epsilon;
-
-			numericalGradient[i] += (plus - minus) / (2 * epsilon);
-
-			System.out.println(gradient[i] + "\t" + numericalGradient[i]);
-			numerator += Math.pow(Math.abs(gradient[i] - numericalGradient[i]), 2);
-			denominator += Math.pow(Math.abs(gradient[i] + numericalGradient[i]), 2);
-		}
-
-		numerator = Math.sqrt(numerator);
-		denominator = Math.sqrt(denominator);
-
-		System.out.println(numerator / denominator + "\n---------------------");
-		if (Double.isNaN(numerator / denominator))
-			return true;
-
-		// gradient check doesn't mean much with FP32
-		return (numerator / denominator) < 0.2;
-	}
-
-	/**
-	 * Gradient checks validate that the implementation of the back propagation algorithm is correct. It does so by comparing the gradients
-	 * with numerical gradients.
-	 *
-	 * @param input     the input
-	 * @param target    the target
-	 * @param batchSize the batch size
-	 * @return whether the gradient check passes
-	 */
-	@SuppressWarnings("Duplicates")
-	public boolean gradientCheck(float[][] input, float[][] target, int batchSize) {
-		setMode(Layer.Mode.GRADIENT_CHECK);
-
-		forward(input, batchSize);
-		backward(target);
-
-		boolean pass = true;
-		for (Layer layer : layers) {
-			for (float[][] parameters : layer.getParameters()) {
-				if (!checkParameters(parameters[0], parameters[1], input, target, batchSize)) {
-					pass = false;
-					System.err.println("Fail\n\n");
-				}
-			}
-		}
-
-		System.out.println("pass: " + pass);
-
-		return pass;
-	}
-
-	@SuppressWarnings("Duplicates")
-	private boolean checkParameters(float[] parameters, float[] gradient, float[][] input, float[][] target, int batchSize) {
-		double epsilon = 1e-3;
-		double numerator = 0, denominator = 0;
-
-		float[] numericalGradient = new float[parameters.length];
-
-		for (int i = 0; i < parameters.length; i++) {
-			parameters[i] += epsilon;
-
-			setMode(Layer.Mode.GRADIENT_CHECK);
-			float[][] y = forward(input, batchSize);
-
-			float plus = 0;
-			for (int j = 0; j < y.length; j++)
-				plus += cost.cost(y[j], target[j]);
-
-			parameters[i] -= 2 * epsilon;
-
-			setMode(Layer.Mode.GRADIENT_CHECK);
-			y = forward(input, batchSize);
-
-			float minus = 0;
-			for (int j = 0; j < y.length; j++)
-				minus += cost.cost(y[j], target[j]);
-
-			parameters[i] += epsilon;
-
-			numericalGradient[i] += (plus - minus) / (2 * epsilon);
-
-			System.out.println(gradient[i] + "\t" + numericalGradient[i]);
-			numerator += Math.pow(Math.abs(gradient[i] - numericalGradient[i]), 2);
-			denominator += Math.pow(Math.abs(gradient[i] + numericalGradient[i]), 2);
-		}
-
-		numerator = Math.sqrt(numerator);
-		denominator = Math.sqrt(denominator);
-
-		System.out.println(numerator / denominator + "\n---------------------");
-		if (Double.isNaN(numerator / denominator))
-			return true;
-
-		// gradient check doesn't mean much with FP32
-		return (numerator / denominator) < 0.2;
-	}
-
-	/**
-	 * Exports model to file.
-	 *
-	 * @param file the file
-	 */
-	public void export(String file) {
-		try (DataOutputStream dos = new DataOutputStream(new BufferedOutputStream(new FileOutputStream(file, false), 16384))) {
-			// exporting layer amount
-			dos.writeInt(layers.length);
-			dos.writeInt(inputSize);
-
-			updaterType.export(dos);
-
-			// exporting layers
-			for (Layer layer : layers) {
-				layer.getType().export(dos);
-				layer.export(dos);
-			}
-
-			// exporting cost
-			cost.getType().export(dos);
-
-			System.out.println("Exported to: " + file);
-		} catch (IOException e) {
+		try {
+			ES.invokeAll(tasks);
+		} catch (InterruptedException e) {
 			e.printStackTrace();
 		}
+
+		tasks.clear();
+	}
+
+	private void visit(Layer layer, Set<Layer> discoverable, Deque<Layer> sorted) {
+		if (sorted.contains(layer))
+			return;
+
+		if (!discoverable.contains(layer))
+			throw new IllegalStateException("Unable to sort a non-directed graph.");
+
+		discoverable.remove(layer);
+		Arrays.stream(layer.getChildren()).forEach(child -> visit((Layer) child, discoverable, sorted));
+
+		sorted.push(layer);
 	}
 
 	/**
 	 * Builder for models.
 	 */
 	public static class Builder {
+		private boolean areLayersSequential;
 		private final ArrayList<Layer> LAYERS = new ArrayList<>();
 		private Schedule schedule;
 		private CostType cost;
 		private UpdaterType updaterType;
 		private int[] inputDimensions;
+
+		public Builder(boolean areLayersSequential) {
+			this.areLayersSequential = areLayersSequential;
+		}
 
 		/**
 		 * Adds a layer.
@@ -674,6 +729,15 @@ public class Model {
 		}
 
 		/**
+		 * Builds the model.
+		 *
+		 * @return the model
+		 */
+		public Model build() {
+			return new Model(LAYERS.toArray(new Layer[0]), areLayersSequential, cost, updaterType, inputDimensions);
+		}
+
+		/**
 		 * Sets the cost function.
 		 *
 		 * @param cost the CostType
@@ -681,17 +745,6 @@ public class Model {
 		 */
 		public Builder cost(CostType cost) {
 			this.cost = cost;
-			return this;
-		}
-
-		/**
-		 * Sets the updater type.
-		 *
-		 * @param updaterType the UpdaterType
-		 * @return the builder
-		 */
-		public Builder updaterType(UpdaterType updaterType) {
-			this.updaterType = updaterType;
 			return this;
 		}
 
@@ -707,12 +760,14 @@ public class Model {
 		}
 
 		/**
-		 * Builds the model.
+		 * Sets the updater type.
 		 *
-		 * @return the model
+		 * @param updaterType the UpdaterType
+		 * @return the builder
 		 */
-		public Model build() {
-			return new Model(LAYERS.toArray(new Layer[0]), cost, updaterType, inputDimensions);
+		public Builder updaterType(UpdaterType updaterType) {
+			this.updaterType = updaterType;
+			return this;
 		}
 	}
 }

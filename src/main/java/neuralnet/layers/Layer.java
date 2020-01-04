@@ -1,24 +1,32 @@
 package neuralnet.layers;
 
 import neuralnet.costs.Cost;
+import neuralnet.layers.graph.Node;
 import neuralnet.optimizers.UpdaterType;
 
 import java.io.DataOutputStream;
 import java.io.IOException;
 
-public interface Layer {
+public abstract class Layer extends Node {
+	public Layer(Node... children) {
+		super(children);
+
+		for (Node child : children)
+			child.getConsumers().add(this);
+	}
+
 	/**
 	 * Sets the mode of the layer. Affects whether gradients get stored and whether Dropout layers drop connections.
 	 *
 	 * @param mode the mode
 	 */
-	void setMode(Mode mode);
+	public abstract void setMode(Mode mode);
 
 	/**
 	 * Gets the LayerType. This can be used when exporting.
 	 * @return the layer type
 	 */
-	LayerType getType();
+	public abstract LayerType getType();
 
 	/**
 	 * Sets the dimensions, given a previous layers dimensions.
@@ -26,14 +34,14 @@ public interface Layer {
 	 * @param dimensions the dimensions of the previous layer
 	 * @param updaterType the updater type
 	 */
-	void setDimensions(int[] dimensions, UpdaterType updaterType);
+	public abstract void setDimensions(int[] dimensions, UpdaterType updaterType);
 
 	/**
 	 * Retrieves the parameters and gradients for gradient checking.
 
 	 * @return the parameters and gradients
 	 */
-	float[][][] getParameters();
+	public abstract float[][][] getParameters();
 
 	/**
 	 * Forward propagation of a layer.
@@ -42,7 +50,7 @@ public interface Layer {
 	 * @param batchSize the batch size
 	 * @return the output
 	 */
-	float[] forward(float[] input, int batchSize);
+	public abstract float[] forward(float[] input, int batchSize);
 
 	/**
 	 * Back propagation of an output layer.
@@ -52,7 +60,7 @@ public interface Layer {
 	 * @param calculateDelta whether to calculate delta
 	 * @return the delta
 	 */
-	float[] backward(Cost cost, float[] targets, boolean calculateDelta);
+	public abstract float[] backward(Cost cost, float[] targets, boolean calculateDelta);
 
 	/**
 	 * Back propagation of a hidden layer, given the layer that was back propagated before.
@@ -61,21 +69,21 @@ public interface Layer {
 	 * @param calculateDelta whether to calculate delta
 	 * @return the delta
 	 */
-	float[] backward(float[] previousDelta, boolean calculateDelta);
+	public abstract float[] backward(float[] previousDelta, boolean calculateDelta);
 
 	/**
 	 * Updates a layer's parameters.
 	 *
 	 * @param length the length of the parameters
 	 */
-	void update(int length);
+	public abstract void update(int length);
 
 	/**
 	 * Gets the output dimensions, for initializing following layers.
 	 *
 	 * @return the output dimensions
 	 */
-	int[] getOutputDimensions();
+	public abstract int[] getOutputDimensions();
 
 	/**
 	 * Exports the layer to an output stream.
@@ -83,12 +91,12 @@ public interface Layer {
 	 * @param dos the output stream
 	 * @throws IOException if there is an error writing to the file
 	 */
-	void export(DataOutputStream dos) throws IOException;
+	public abstract void export(DataOutputStream dos) throws IOException;
 
 	/**
 	 * The modes of a layer. Affect whether gradients get stored and whether Dropout layers drop connections.
 	 */
-	enum Mode {
+	public enum Mode {
 		EVAL, TRAIN, GRADIENT_CHECK
 	}
 }

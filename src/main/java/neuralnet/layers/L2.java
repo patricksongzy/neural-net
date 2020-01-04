@@ -1,6 +1,7 @@
 package neuralnet.layers;
 
 import neuralnet.costs.Cost;
+import neuralnet.layers.graph.Node;
 import neuralnet.optimizers.UpdaterType;
 
 import java.io.DataInputStream;
@@ -8,13 +9,15 @@ import java.io.DataOutputStream;
 import java.io.IOException;
 
 @SuppressWarnings("FieldCanBeLocal")
-public class L2 implements Layer {
+public class L2 extends Layer {
 	private int inputSize;
 	private int batchSize;
 	private float epsilon;
 	private float[] output;
 
-	private L2(float epsilon) {
+	private L2(Node[] children, float epsilon) {
+		super(children);
+
 		this.epsilon = epsilon;
 	}
 
@@ -87,9 +90,14 @@ public class L2 implements Layer {
 	/**
 	 * Builder for L2 layers.
 	 */
-	@SuppressWarnings({"unused", "WeakerAccess"})
+	@SuppressWarnings("unused")
 	public static class Builder {
+		private Node[] children;
 		private float epsilon = 1e-12f;
+
+		public Builder(Node... children) {
+			this.children = children;
+		}
 
 		public Builder epsilon(float epsilon) {
 			this.epsilon = epsilon;
@@ -97,7 +105,7 @@ public class L2 implements Layer {
 		}
 
 		public L2 build() {
-			return new L2(epsilon);
+			return new L2(children, epsilon);
 		}
 	}
 }

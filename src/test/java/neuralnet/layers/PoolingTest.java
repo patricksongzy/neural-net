@@ -33,7 +33,7 @@ class PoolingTest {
 
 	@Test
 	void gradientCheck() {
-		Model model = new Model.Builder().add(
+		Model model = new Model.Builder(true).add(
 			new Convolutional.Builder().filterAmount(16).filterSize(2).initializer(new HeInitialization())
 				.pad(2).stride(2).activationType(ActivationType.RELU).build()
 		).add(

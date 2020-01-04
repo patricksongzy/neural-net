@@ -5,6 +5,7 @@ import neuralnet.activations.Activation;
 import neuralnet.activations.ActivationType;
 import neuralnet.costs.Cost;
 import neuralnet.initializers.Initializer;
+import neuralnet.layers.graph.Node;
 import neuralnet.optimizers.Updater;
 import neuralnet.optimizers.UpdaterType;
 import org.jocl.CL;
@@ -24,7 +25,7 @@ import java.util.stream.IntStream;
  * (the input) and an output is created. A bias term is added, then the output is activated Deltas are calculated a layer ahead
  * (the next layer that will be updated), so that upsampling layers are compatible
  */
-public class Convolutional implements Layer {
+public class Convolutional extends Layer {
 	private Mode mode;
 	private int batchSize;
 
@@ -54,8 +55,10 @@ public class Convolutional implements Layer {
 	private float[] output;
 	private cl_mem inputBuffer;
 
-	private Convolutional(int pad, int stride, int filterAmount, int filterSize, int dilation, Initializer initializer,
+	private Convolutional(Node[] children, int pad, int stride, int filterAmount, int filterSize, int dilation, Initializer initializer,
 						  ActivationType activationType) {
+		super(children);
+
 		Objects.requireNonNull(initializer);
 		Objects.requireNonNull(activationType);
 		if (pad < 0)
@@ -497,6 +500,7 @@ public class Convolutional implements Layer {
 	 */
 	@SuppressWarnings({"unused", "WeakerAccess"})
 	public static class Builder {
+		private Node[] children;
 		private int pad;
 		private int stride;
 		private int filterAmount, filterSize;
@@ -504,7 +508,8 @@ public class Convolutional implements Layer {
 		private Initializer initializer;
 		private ActivationType activationType;
 
-		public Builder() {
+		public Builder(Node... children) {
+			this.children = children;
 			dilation = 1;
 		}
 
@@ -601,7 +606,7 @@ public class Convolutional implements Layer {
 		 * @return the layer
 		 */
 		public Convolutional build() {
-			return new Convolutional(pad, stride, filterAmount, filterSize, dilation, initializer, activationType);
+			return new Convolutional(children, pad, stride, filterAmount, filterSize, dilation, initializer, activationType);
 		}
 	}
 }
