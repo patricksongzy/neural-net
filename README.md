@@ -30,7 +30,7 @@ Model model = new Model.Builder().add(
 
 ## No Computational Graphs
 * An implementation of computational graphs is in-progress.
-* Makes it a bit clearer on how everything is implemented at first.
+* Shows how derivatives are computed, though does make implementation less clean.
 
 ## License
 * MIT license.
