@@ -4,6 +4,16 @@ A neural network implementation in Java, for ICS3U and ICS4U. This implementatio
 ## Example Project: Bird Recognizer
 ![A picture of a Bald Eagle being recognized by a bird recognizer](https://patricksongzy.github.io/assets/images/ae.png)
 
+**Model**
+```
+@inproceedings{Simon15:NAC,
+    author = {Marcel Simon and Erik Rodner},
+    booktitle = {International Conference on Computer Vision (ICCV)},
+    title = {Neural Activation Constellations: Unsupervised Part Model Discovery with Convolutional Networks},
+    year = {2015},
+}
+```
+
 ## Project
 This project includes:
 * Convolutional, Fully-connected, Down-Sampling/Pooling, Dropout, GRU, Inception, Resnet, Batch Norm layers (and more).
