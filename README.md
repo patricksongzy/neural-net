@@ -15,7 +15,6 @@ A neural network implementation in Java, for ICS3U and ICS4U. This implementatio
 ```
 
 ## Project
-This project includes:
 * Convolutional, Fully-connected, Down-Sampling/Pooling, Dropout, GRU, Inception, ResNet, Batch Norm layers, (and more).
 * ReLU, Identity/Linear, Sigmoid, Softmax and TanH Activations.
 * Cross-Entropy and Mean-Square-Error costs.
@@ -33,7 +32,7 @@ Model model = new Model.Builder().add(
 ```
 
 ## Problems
-* Variable naming in GRU is not completely correct (as they should be named to represent before-activation derivatives ie. if `y_t = x_t * w_t;` and `x_{t + 1} = activation(y_t);` then the "before-activation" derivative would be `dx_{t + 1}/dy_t`). I was unable to come up with proper variable names. (dhRaw is used [Here](https://gist.github.com/karpathy/d4dee566867f8291f086))
+* Variable naming in GRU is not completely correct (as they should be named to represent before-activation derivatives ie. if `y_t = x_t * w_t;` and `x_{t + 1} = activation(y_t);` then the "before-activation" derivative would be `dx_{t + 1}/dy_t`). (dhRaw is used [Here](https://gist.github.com/karpathy/d4dee566867f8291f086))
 * Models are created sequentially. To fix this, Layers should be created as nodes in a graph. Workaround: implementing non-sequential Models as Layers.
 * R-CNN, GAN and Inception-Resnet are not implemented yet.
 * PSP net is not working correctly (don't know why).
