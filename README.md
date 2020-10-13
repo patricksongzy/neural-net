@@ -1,8 +1,8 @@
 # neural-net
 A neural network implementation in Java, for ICS3U and ICS4U. This implementation passes the current tests that have been implemented.
 
-## Example Project: Bird Recogniser
-![Example project: bird recogniser](https://raw.githubusercontent.com/patricksongzy/neural-net/master/images/bird-recognizer.gif)
+## Example Project: Bird Recognizer
+![A picture of a Bald Eagle being recognized by a bird recognizer](https://patricksongzy.github.io/assets/images/ae.png)
 
 ## Project
 This project includes:
