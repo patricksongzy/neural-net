@@ -78,7 +78,7 @@ public class MNIST {
 		List<int[][]> trainImages = readImages("train-images.idx3-ubyte");
 		int[] trainLabels = readLabels("train-labels.idx1-ubyte");
 
-		Map<float[], float> trainData = new HashMap<>();
+		Map<float[], float[]> trainData = new HashMap<>();
 		// create inputs
 		float[][] trainInputs = new float[trainImages.size()][784];
 
